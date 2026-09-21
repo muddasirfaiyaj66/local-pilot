@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" role="img" aria-label="LocalPilot">
+  <rect width="32" height="32" rx="7" fill="#0B0B0B"/>
+  <path
+    fill="#3B82F6"
+    fill-rule="evenodd"
+    d="M9 6h5v13h7.5c4.1 0 7-2.7 7-6.2S25.6 6 21.5 6H14V6H9zm5 3.5h6.8c2.1 0 3.5 1.3 3.5 3s-1.4 3-3.5 3H14v-6zM9 22.5h15V26H9v-3.5z"
+  />
+</svg>

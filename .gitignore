@@ -1,0 +1,16 @@
+node_modules
+dist
+out
+release
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+Thumbs.db
+coverage
+*.local
+.idea
+.vscode
+.cursor
+*.tsbuildinfo

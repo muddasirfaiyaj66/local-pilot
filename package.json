@@ -1,0 +1,67 @@
+{
+  "name": "localpilot",
+  "version": "0.1.0",
+  "description": "LocalPilot — cross-platform desktop AI agent that controls your computer",
+  "main": "./out/main/index.js",
+  "author": "muddasirfaiyaj66",
+  "license": "MIT",
+  "homepage": "https://github.com/muddasirfaiyaj66/local-pilot#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/muddasirfaiyaj66/local-pilot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/muddasirfaiyaj66/local-pilot/issues"
+  },
+  "keywords": [
+    "electron",
+    "ai-agent",
+    "desktop",
+    "ollama",
+    "openai",
+    "localpilot",
+    "automation"
+  ],
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "@electron-toolkit/utils": "^4.0.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
+    "@phosphor-icons/react": "^2.1.10",
+    "electron-updater": "^6.6.2",
+    "zod": "^3.24.2",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.14",
+    "@types/node": "^22.13.10",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^35.0.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^3.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwindcss": "^4.0.14",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.1",
+    "vitest": "^3.0.8"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "electron@35.7.5": true,
+    "esbuild@0.25.12": true
+  }
+}

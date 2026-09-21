@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-label="LocalPilot">
+  <rect width="128" height="128" rx="28" fill="#0B0B0B"/>
+  <!--
+    LocalPilot LP monogram
+    Shared vertical stem + geometric P bowl + L baseline
+  -->
+  <g fill="#3B82F6" fill-rule="evenodd">
+    <!-- Outer LP silhouette -->
+    <path d="M34 24h20v48h26c17.7 0 30-12.1 30-27S97.7 24 80 24H54V24H34v72h62V84H54V72H34V24z"/>
+    <!-- P counter (hole) -->
+    <path d="M54 38h24c8.8 0 15 5.8 15 13s-6.2 13-15 13H54V38z"/>
+  </g>
+</svg>

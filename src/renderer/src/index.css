@@ -1,0 +1,206 @@
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: #0a0a0a;
+  --color-surface: #111111;
+  --color-surface-2: #171717;
+  --color-hover: #1f1f1f;
+  --color-border: #2a2a2a;
+  --color-border-strong: #3a3a3a;
+  --color-text: #e4e4e4;
+  --color-text-muted: #8a8a8a;
+  --color-text-faint: #5c5c5c;
+  --color-accent: #3b82f6;
+  --color-accent-2: #2563eb;
+  --color-on-accent: #ffffff;
+  --color-danger: #ef4444;
+  --color-warn: #eab308;
+  --color-ok: #22c55e;
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-bg);
+  color-scheme: dark;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+[role='button'],
+a,
+select,
+summary {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled {
+  cursor: not-allowed;
+}
+
+:focus-visible {
+  outline: 1px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.lp-input {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  padding: 7px 10px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  border-radius: 6px;
+  transition: border-color 120ms ease;
+}
+.lp-input:hover {
+  border-color: var(--color-border-strong);
+}
+.lp-input:focus {
+  border-color: var(--color-accent);
+  outline: none;
+}
+.lp-input::placeholder {
+  color: var(--color-text-faint);
+}
+
+.lp-select {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  padding: 4px 22px 4px 6px;
+  border-radius: 4px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238a8a8a' viewBox='0 0 256 256'%3E%3Cpath d='M213.66 101.66l-80 80a8 8 0 01-11.32 0l-80-80a8 8 0 0111.32-11.32L128 164.69l74.34-74.35a8 8 0 0111.32 11.32z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+.lp-select:hover {
+  color: var(--color-text);
+  background-color: var(--color-hover);
+}
+.lp-select:focus {
+  outline: 1px solid var(--color-accent);
+}
+
+.lp-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.lp-icon-btn:hover:not(:disabled) {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.lp-icon-btn[aria-pressed='true'] {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.lp-icon-btn:disabled {
+  opacity: 0.35;
+}
+
+.lp-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  transition: background-color 120ms ease, opacity 120ms ease;
+}
+.lp-send:hover:not(:disabled) {
+  background: var(--color-accent-2);
+}
+.lp-send:disabled {
+  opacity: 0.35;
+}
+
+.lp-stop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  transition: opacity 120ms ease;
+}
+.lp-stop:hover {
+  opacity: 0.9;
+}

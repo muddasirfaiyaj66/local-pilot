@@ -1,0 +1,39 @@
+---
+name: Bug report
+description: Something broken in LocalPilot
+labels: [bug]
+body:
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Phase / area
+      options:
+        - Phase 1 — chat / providers
+        - Phase 2 — agent / tools
+        - Phase 3 — browser
+        - Phase 4 — screen
+        - Phase 5 — media / MCP
+        - Phase 6 — packaging
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expect
+    attributes:
+      label: What did you expect?
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: Windows 11 / macOS 15 / Ubuntu 24.04
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      placeholder: v20.x
