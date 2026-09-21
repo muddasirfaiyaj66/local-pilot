@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -39,6 +39,21 @@ export function registerIpcHandlers(store: SettingsStore): void {
       try {
         mkdirSync(dirname(filePath), { recursive: true })
         writeFileSync(filePath, content, 'utf8')
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    }
+  )
+  ipcMain.handle(
+    IpcChannels.shellOpenExternal,
+    async (_e, url: string): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        const parsed = new URL(url)
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:' && parsed.protocol !== 'mailto:') {
+          return { ok: false, error: `Blocked protocol ${parsed.protocol}` }
+        }
+        await shell.openExternal(parsed.toString())
         return { ok: true }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }

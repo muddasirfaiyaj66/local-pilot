@@ -1,6 +1,7 @@
 import { CaretRight, CheckCircle, CircleNotch, Wrench, XCircle } from '@phosphor-icons/react'
 import { useState } from 'react'
 import type { TimelineEntry } from '../store/appStore'
+import { Markdown } from './Markdown'
 
 interface AgentActivityProps {
   timeline: TimelineEntry[]
@@ -9,61 +10,24 @@ interface AgentActivityProps {
   busyLabel: string
 }
 
-/** Cursor-like collapsible thought + tool exploration blocks */
+/** Live agent turn: collapsible tool exploration plus the streaming answer. */
 export function AgentActivity({
   timeline,
   streamingText,
   isStreaming,
   busyLabel
 }: AgentActivityProps): React.JSX.Element | null {
-  const tools = timeline.filter((e) => e.kind === 'tool' || e.kind === 'result')
-  const hasThought = Boolean(streamingText.trim())
-  const showBusy = isStreaming && !hasThought
-  const [openTools, setOpenTools] = useState(true)
-  const [openThought, setOpenThought] = useState(true)
-
-  if (!isStreaming && tools.length === 0) return null
-
+  const [openTools, setOpenTools] = useState(false)
+  const text = streamingText.trim()
   const toolPairs = pairTools(timeline)
+
+  if (!isStreaming && toolPairs.length === 0) return null
+
   const toolSummary =
-    toolPairs.length === 0
-      ? null
-      : toolPairs.length === 1
-        ? toolPairs[0]!.name
-        : `Explored ${toolPairs.length} tools`
+    toolPairs.length === 1 ? toolPairs[0]!.name : `Explored ${toolPairs.length} tools`
 
   return (
-    <div className="flex flex-col gap-1.5 lp-msg-enter">
-      {(hasThought || showBusy) && (
-        <div className="lp-agent-block">
-          <button
-            type="button"
-            className="lp-agent-block-head"
-            onClick={() => setOpenThought((v) => !v)}
-            aria-expanded={openThought}
-          >
-            <CaretRight
-              size={11}
-              className={`shrink-0 text-[var(--color-text-faint)] transition-transform duration-150 ${openThought ? 'rotate-90' : ''}`}
-              aria-hidden
-            />
-            {isStreaming && !hasThought ? (
-              <CircleNotch size={12} className="text-[var(--color-accent)] motion-safe:animate-spin" aria-hidden />
-            ) : (
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" aria-hidden />
-            )}
-            <span className="text-[12px] font-medium text-[var(--color-text-muted)]">
-              {hasThought ? 'Thought' : busyLabel}
-            </span>
-          </button>
-          {openThought && hasThought && (
-            <div className="lp-agent-block-body whitespace-pre-wrap break-words text-[12.5px] leading-[1.55] text-[var(--color-text-muted)]">
-              {streamingText}
-            </div>
-          )}
-        </div>
-      )}
-
+    <div className="flex flex-col gap-2 lp-msg-enter">
       {toolPairs.length > 0 && (
         <div className="lp-agent-block">
           <button
@@ -111,6 +75,24 @@ export function AgentActivity({
           )}
         </div>
       )}
+
+      {text ? (
+        <article className="lp-assistant-msg">
+          <div className="mb-1 text-[11px] font-medium text-[var(--color-text-faint)]">
+            LocalPilot
+          </div>
+          <Markdown text={text} />
+        </article>
+      ) : isStreaming ? (
+        <div className="flex items-center gap-2 px-0.5 text-[12px] text-[var(--color-text-muted)]">
+          <CircleNotch
+            size={13}
+            className="text-[var(--color-accent)] motion-safe:animate-spin"
+            aria-hidden
+          />
+          {busyLabel}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -122,7 +104,7 @@ function pairTools(
   for (const e of timeline) {
     if (e.kind === 'tool') {
       const name = e.text.replace(/\s*\(.*\)$/, '').trim() || e.text
-      out.push({ id: e.id, name, detail: e.text.includes('(') ? e.text : undefined })
+      out.push({ id: e.id, name })
     } else if (e.kind === 'result' && out.length > 0) {
       const last = out[out.length - 1]!
       last.ok = e.ok

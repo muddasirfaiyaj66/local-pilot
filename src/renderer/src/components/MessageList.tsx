@@ -2,6 +2,7 @@ import { FolderOpen, WarningCircle } from '@phosphor-icons/react'
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '../store/appStore'
 import { AgentActivity } from './AgentActivity'
+import { Markdown } from './Markdown'
 import logoMark from '../assets/logo-mark.svg'
 
 export function MessageList(): React.JSX.Element {
@@ -101,9 +102,7 @@ export function MessageList(): React.JSX.Element {
               <div className="mb-1 text-[11px] font-medium text-[var(--color-text-faint)]">
                 LocalPilot
               </div>
-              <div className="whitespace-pre-wrap break-words text-[13px] leading-[1.6] text-[var(--color-text)]">
-                {m.content}
-              </div>
+              <Markdown text={m.content} />
             </article>
           )
         )}

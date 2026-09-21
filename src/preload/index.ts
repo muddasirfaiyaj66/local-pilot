@@ -78,7 +78,12 @@ const api: LocalPilotApi = {
       ok: boolean
       error?: string
     }>,
-  openFolder: () => ipcRenderer.invoke(IpcChannels.dialogOpenFolder) as Promise<string | null>
+  openFolder: () => ipcRenderer.invoke(IpcChannels.dialogOpenFolder) as Promise<string | null>,
+  openExternal: (url: string) =>
+    ipcRenderer.invoke(IpcChannels.shellOpenExternal, url) as Promise<{
+      ok: boolean
+      error?: string
+    }>
 }
 
 contextBridge.exposeInMainWorld('localpilot', api)

@@ -2,6 +2,17 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.9.0] — 2026-09-21
+
+### Added
+
+- Markdown rendering in chat: headings, bold, lists, tables, code blocks, and clickable links that open in the system browser
+
+### Fixed
+
+- Answers no longer appear twice — the run summary is only appended when it adds new text
+- Streaming reply renders as the assistant message instead of being wrapped in a thought block
+
 ## [0.8.7] — 2026-09-21
 
 ### Fixed

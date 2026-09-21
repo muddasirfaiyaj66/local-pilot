@@ -1,6 +1,6 @@
 {
   "name": "localpilot",
-  "version": "0.8.7",
+  "version": "0.9.0",
   "description": "LocalPilot — cross-platform desktop AI agent that controls your computer",
   "main": "./out/main/index.js",
   "author": "muddasirfaiyaj66",
@@ -42,6 +42,8 @@
     "electron-updater": "^6.6.2",
     "ffmpeg-static": "^5.3.0",
     "playwright": "^1.63.0",
+    "react-markdown": "^9.1.0",
+    "remark-gfm": "^4.0.1",
     "sharp": "^0.35.4",
     "trash": "^9.0.0",
     "zod": "^3.24.2",

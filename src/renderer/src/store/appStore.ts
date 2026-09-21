@@ -407,11 +407,15 @@ function bindGlobalListeners(get: Get, set: Set): void {
       }))
     } else if (event.type === 'done') {
       patchTask(set, taskId, (prev) => {
-        const content =
-          (prev.run.streamingText.trim() || event.summary || 'Agent finished.') +
-          (event.summary && prev.run.streamingText.trim()
-            ? `\n\n—\n${event.summary}`
-            : '')
+        const streamed = prev.run.streamingText.trim()
+        const summary = event.summary?.trim() ?? ''
+        // The summary often repeats the streamed answer verbatim; only append new text.
+        const summaryIsNew = summary.length > 0 && !streamed.includes(summary)
+        const content = streamed
+          ? summaryIsNew
+            ? `${streamed}\n\n—\n${summary}`
+            : streamed
+          : summary || 'Agent finished.'
         return {
           ...prev,
           messages: [

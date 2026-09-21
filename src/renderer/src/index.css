@@ -570,6 +570,124 @@ details[open] > .lp-plan-summary::before {
   background: var(--color-hover);
 }
 
+/* —— Markdown —— */
+
+.lp-md {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--color-text);
+  word-break: break-word;
+}
+.lp-md > *:first-child {
+  margin-top: 0;
+}
+.lp-md > *:last-child {
+  margin-bottom: 0;
+}
+.lp-md p {
+  margin: 0 0 10px;
+}
+.lp-md h1,
+.lp-md h2,
+.lp-md h3,
+.lp-md h4 {
+  margin: 16px 0 8px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.lp-md h1 {
+  font-size: 16px;
+}
+.lp-md h2 {
+  font-size: 15px;
+}
+.lp-md h3 {
+  font-size: 14px;
+}
+.lp-md h4 {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.lp-md strong {
+  font-weight: 600;
+  color: #fff;
+}
+.lp-md em {
+  font-style: italic;
+}
+.lp-md ul,
+.lp-md ol {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+.lp-md li {
+  margin: 3px 0;
+}
+.lp-md ul {
+  list-style: disc;
+}
+.lp-md ol {
+  list-style: decimal;
+}
+.lp-md a {
+  color: var(--color-accent);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklab, var(--color-accent) 40%, transparent);
+}
+.lp-md a:hover {
+  color: var(--color-accent-2);
+  border-bottom-color: var(--color-accent-2);
+}
+.lp-md blockquote {
+  margin: 0 0 10px;
+  padding: 2px 0 2px 10px;
+  border-left: 2px solid var(--color-border-strong);
+  color: var(--color-text-muted);
+}
+.lp-md hr {
+  margin: 14px 0;
+  border: none;
+  border-top: 1px solid var(--color-border);
+}
+.lp-md-inline-code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.lp-md pre {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.lp-md pre code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+.lp-md table {
+  width: 100%;
+  margin: 0 0 10px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.lp-md th,
+.lp-md td {
+  border: 1px solid var(--color-border);
+  padding: 5px 8px;
+  text-align: left;
+}
+.lp-md th {
+  background: var(--color-surface);
+  font-weight: 600;
+}
+
 .lp-mode-pill {
   display: inline-flex;
   align-items: center;
