@@ -35,7 +35,9 @@ export const IpcChannels = {
   appCheckUpdates: 'app:check-updates',
   fsRestore: 'fs:restore',
   dialogOpenFolder: 'dialog:open-folder',
-  shellOpenExternal: 'shell:open-external'
+  shellOpenExternal: 'shell:open-external',
+  procList: 'proc:list',
+  procStop: 'proc:stop'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
@@ -110,6 +112,17 @@ export interface LocalPilotApi {
   restoreFile: (path: string, content: string) => Promise<{ ok: boolean; error?: string }>
   openFolder: () => Promise<string | null>
   openExternal: (url: string) => Promise<{ ok: boolean; error?: string }>
+  listProcesses: () => Promise<RunningProcess[]>
+  stopProcess: (id: string) => Promise<{ ok: boolean }>
+}
+
+export interface RunningProcess {
+  id: string
+  command: string
+  cwd: string
+  url: string | null
+  running: boolean
+  startedAt: number
 }
 
 export type { AgentStartRequest, PermissionRequest }

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { AgentPlan, PermissionRequest } from '@shared/agent'
+import type { RunningProcess } from '@shared/ipc'
 import type {
   AppSettings,
   ChatImage,
@@ -102,6 +103,9 @@ interface AppState {
   /** Dev server URL detected from a background process, shown in the preview pane */
   previewUrl: string | null
   setPreviewUrl: (url: string | null) => void
+  processes: RunningProcess[]
+  refreshProcesses: () => Promise<void>
+  stopProcess: (id: string) => Promise<void>
   init: () => Promise<void>
   setView: (view: 'chat' | 'settings') => void
   setInteractionMode: (mode: InteractionMode) => void
@@ -359,6 +363,9 @@ function bindGlobalListeners(get: Get, set: Set): void {
       if (event.result.ok && typeof event.result.meta?.previewUrl === 'string') {
         set({ previewUrl: event.result.meta.previewUrl })
       }
+      if (event.result.meta?.processId) {
+        void get().refreshProcesses()
+      }
       patchTask(set, taskId, (prev) => {
         let pendingChanges = prev.pendingChanges
         const meta = event.result.meta
@@ -474,8 +481,22 @@ export const useAppStore = create<AppState>((set, get) => ({
   pendingChanges: [],
   usage: null,
   previewUrl: null,
+  processes: [],
 
   setPreviewUrl: (previewUrl) => set({ previewUrl }),
+
+  refreshProcesses: async () => {
+    const processes = await window.localpilot.listProcesses()
+    set((s) => {
+      const stillRunning = processes.some((p) => p.running && p.url === s.previewUrl)
+      return { processes, previewUrl: stillRunning ? s.previewUrl : null }
+    })
+  },
+
+  stopProcess: async (id) => {
+    await window.localpilot.stopProcess(id)
+    await get().refreshProcesses()
+  },
 
   init: async () => {
     const [version, settings, providers] = await Promise.all([
@@ -485,6 +506,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     ])
     set({ version, settings, providers, ready: true })
     bindGlobalListeners(get, set)
+    void get().refreshProcesses()
 
     window.localpilot.onAgentKill(() => {
       void get().stopAllAgents()

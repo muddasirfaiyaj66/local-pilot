@@ -1,4 +1,11 @@
-import { ArrowClockwise, ArrowSquareOut, Browser, ListBullets, Monitor } from '@phosphor-icons/react'
+import {
+  ArrowClockwise,
+  ArrowSquareOut,
+  Browser,
+  ListBullets,
+  Monitor,
+  Stop
+} from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../store/appStore'
 
@@ -9,6 +16,11 @@ export function LivePreviewPane(): React.JSX.Element {
   const isStreaming = useAppStore((s) => s.isStreaming)
   const settings = useAppStore((s) => s.settings)
   const previewUrl = useAppStore((s) => s.previewUrl)
+  const processes = useAppStore((s) => s.processes)
+  const refreshProcesses = useAppStore((s) => s.refreshProcesses)
+  const stopProcess = useAppStore((s) => s.stopProcess)
+  const setPreviewUrl = useAppStore((s) => s.setPreviewUrl)
+  const running = processes.filter((p) => p.running)
   const [tab, setTab] = useState<Tab>('screen')
   const [frameKey, setFrameKey] = useState(0)
   const [preview, setPreview] = useState<{ dataUrl: string; width: number; height: number } | null>(
@@ -24,6 +36,13 @@ export function LivePreviewPane(): React.JSX.Element {
   useEffect(() => {
     if (previewUrl) setTab('app')
   }, [previewUrl])
+
+  // Keep the server list honest while a run is in flight.
+  useEffect(() => {
+    if (!isStreaming) return
+    const id = window.setInterval(() => void refreshProcesses(), 3000)
+    return () => window.clearInterval(id)
+  }, [isStreaming, refreshProcesses])
 
   useEffect(() => {
     if (tab !== 'screen') return
@@ -95,6 +114,35 @@ export function LivePreviewPane(): React.JSX.Element {
 
       {tab === 'app' ? (
         <div className="flex min-h-0 flex-1 flex-col">
+          {running.length > 0 && (
+            <ul className="shrink-0 border-b border-[var(--color-border)] p-1.5">
+              {running.map((p) => (
+                <li key={p.id} className="lp-tool-pill">
+                  <span
+                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-ok)]"
+                    aria-hidden
+                  />
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 truncate text-left font-[var(--font-mono)] text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                    title={`${p.command} — ${p.cwd}`}
+                    onClick={() => p.url && setPreviewUrl(p.url)}
+                  >
+                    {p.url ? p.url.replace(/^https?:\/\//, '') : p.command}
+                  </button>
+                  <button
+                    type="button"
+                    className="lp-icon-btn !h-5 !w-5"
+                    title={`Stop ${p.command}`}
+                    aria-label={`Stop ${p.command}`}
+                    onClick={() => void stopProcess(p.id)}
+                  >
+                    <Stop size={10} weight="fill" className="text-[var(--color-danger)]" aria-hidden />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           {previewUrl ? (
             <>
               <div className="flex items-center gap-1 border-b border-[var(--color-border)] px-2 py-1.5">
@@ -132,8 +180,9 @@ export function LivePreviewPane(): React.JSX.Element {
             </>
           ) : (
             <div className="flex flex-1 items-center justify-center px-4 text-center text-[11px] leading-relaxed text-[var(--color-text-faint)]">
-              Ask the agent to run the app. A dev server started with a background process appears
-              here.
+              {running.length > 0
+                ? 'Select a server above to preview it.'
+                : 'Ask the agent to run the app. A dev server started in the background appears here.'}
             </div>
           )}
         </div>

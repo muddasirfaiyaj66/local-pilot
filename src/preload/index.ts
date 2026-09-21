@@ -7,6 +7,7 @@ import {
   type LocalPilotApi,
   type PermissionResponse,
   type ProviderUpsertInput,
+  type RunningProcess,
   type UpdateCheckResult
 } from '../shared/ipc'
 import type { AgentStartRequest } from '../shared/agent'
@@ -83,7 +84,10 @@ const api: LocalPilotApi = {
     ipcRenderer.invoke(IpcChannels.shellOpenExternal, url) as Promise<{
       ok: boolean
       error?: string
-    }>
+    }>,
+  listProcesses: () => ipcRenderer.invoke(IpcChannels.procList) as Promise<RunningProcess[]>,
+  stopProcess: (id: string) =>
+    ipcRenderer.invoke(IpcChannels.procStop, id) as Promise<{ ok: boolean }>
 }
 
 contextBridge.exposeInMainWorld('localpilot', api)

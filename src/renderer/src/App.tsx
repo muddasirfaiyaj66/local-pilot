@@ -1,4 +1,4 @@
-import { ChatCircle, Gear } from '@phosphor-icons/react'
+import { ChatCircle, Gear, Stop } from '@phosphor-icons/react'
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { useAppStore } from './store/appStore'
 import { SettingsPage } from './pages/SettingsPage'
@@ -10,6 +10,33 @@ import { PermissionModal } from './components/PermissionModal'
 import { DiffReviewPane } from './components/DiffReviewPane'
 import { WorkspaceBanner, WorkspaceChip } from './components/WorkspaceBar'
 import logoMark from './assets/logo-mark.svg'
+
+function RunningServersChip(): React.JSX.Element | null {
+  const processes = useAppStore((s) => s.processes)
+  const stopProcess = useAppStore((s) => s.stopProcess)
+  const running = processes.filter((p) => p.running)
+  if (running.length === 0) return null
+  const first = running[0]!
+  const port = first.url?.match(/:(\d+)/)?.[1]
+  return (
+    <span className="flex items-center gap-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] pl-1.5 text-[10px] text-[var(--color-text-muted)]">
+      <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-ok)]" aria-hidden />
+      <span className="font-[var(--font-mono)]" title={running.map((p) => p.command).join('\n')}>
+        {port ? `:${port}` : 'server'}
+        {running.length > 1 ? ` +${running.length - 1}` : ''}
+      </span>
+      <button
+        type="button"
+        className="lp-icon-btn !h-5 !w-5"
+        aria-label="Stop server"
+        title={`Stop ${first.command}`}
+        onClick={() => void stopProcess(first.id)}
+      >
+        <Stop size={9} weight="fill" className="text-[var(--color-danger)]" aria-hidden />
+      </button>
+    </span>
+  )
+}
 
 function RunningAgentsBadge(): React.JSX.Element | null {
   const sessions = useAppStore((s) => s.sessions)
@@ -129,6 +156,7 @@ export default function App(): React.JSX.Element {
               </span>
               <RunningAgentsBadge />
               <div className="flex-1" />
+              <RunningServersChip />
               <WorkspaceChip />
             </div>
             <WorkspaceBanner />

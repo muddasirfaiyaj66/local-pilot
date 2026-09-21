@@ -33,6 +33,20 @@ describe('proc_start', () => {
   })
 })
 
+describe('proc_start reuse', () => {
+  it('reuses a running process instead of starting a second one', async () => {
+    const command = 'node -e "console.log(\'up at http://localhost:4399/\'); setTimeout(()=>{}, 10000)"'
+    const first = await start.execute({ command, waitMs: 8000 }, ctx)
+    const second = await start.execute({ command, waitMs: 8000 }, ctx)
+
+    expect(first.ok).toBe(true)
+    expect(second.ok).toBe(true)
+    expect(second.meta?.reused).toBe(true)
+    expect(second.meta?.processId).toBe(first.meta?.processId)
+    expect(second.meta?.previewUrl).toBe('http://localhost:4399/')
+  })
+})
+
 describe('proc_logs', () => {
   it('errors when no process matches', async () => {
     const result = await logs.execute({ id: 'nope' }, ctx)

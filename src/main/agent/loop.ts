@@ -66,6 +66,16 @@ const BUILD_GUIDE = [
   '7. If a command fails, do not retry it with a different flag. Change approach.'
 ].join('\n')
 
+/** How to work a problem instead of declaring victory. */
+const WORK_RULES = [
+  'HOW TO WORK:',
+  '- Read before you edit. Open the file you are about to change and edit the real cause, not a guess.',
+  '- One dev server only. If one is already running, reuse that URL — do not start another, and do not switch ports.',
+  '- Verify with evidence: check proc_logs output, re-read the file you changed, or load the page. Never claim something works because you wrote it.',
+  '- Only describe what you actually observed. If you did not verify a claim, say what is unverified instead of calling it complete.',
+  '- When the user reports a problem, reproduce or locate it first, then fix that specific thing.'
+].join('\n')
+
 export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopResult> {
   const workspacePath = opts.workspacePath.trim()
   const mode = opts.mode ?? 'agent'
@@ -109,6 +119,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
           createGoal
             ? 'For create/build goals in an empty workspace, scaffold files directly — do not keep listing an empty directory.'
             : '',
+          `\n\n${WORK_RULES}`,
           createGoal ? `\n\n${BUILD_GUIDE}` : ''
         ]
           .filter(Boolean)
@@ -333,7 +344,7 @@ ${modeHint}`
       messages.push({
         role: 'user',
         content: url
-          ? `The app is running at ${url}. Call proc_logs once to confirm it compiled without errors, fix anything broken, then finish with a short summary that includes the URL.`
+          ? `The app is running at ${url}. Do not start another server — reuse this one. Call proc_logs once to confirm it compiled without errors, fix anything broken, then finish with a short summary that includes the URL.`
           : 'The process started but no URL was detected. Call proc_logs to check for errors and fix them, or finish with a short summary.'
       })
     }

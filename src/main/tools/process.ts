@@ -61,8 +61,50 @@ const StartArgs = z.object({
   command: z.string().min(1),
   cwd: z.string().optional(),
   /** How long to watch startup output before returning (default 25s). */
-  waitMs: z.number().int().positive().max(120_000).optional()
+  waitMs: z.number().int().positive().max(120_000).optional(),
+  /** Kill an existing identical process first instead of reusing it. */
+  restart: z.boolean().optional()
 })
+
+export interface ProcessInfo {
+  id: string
+  command: string
+  cwd: string
+  url: string | null
+  running: boolean
+  startedAt: number
+}
+
+function toInfo(proc: ManagedProcess): ProcessInfo {
+  return {
+    id: proc.id,
+    command: proc.command,
+    cwd: proc.cwd,
+    url: proc.url,
+    running: proc.exitCode === null,
+    startedAt: proc.startedAt
+  }
+}
+
+export function listProcesses(): ProcessInfo[] {
+  return [...processes.values()].map(toInfo)
+}
+
+export function stopProcess(id: string): boolean {
+  const proc = processes.get(id)
+  if (!proc) return false
+  killTree(proc)
+  processes.delete(id)
+  return true
+}
+
+/** Same command in the same folder: reuse it so dev servers stop hopping ports. */
+function findRunning(command: string, cwd: string): ManagedProcess | undefined {
+  const key = command.trim().toLowerCase()
+  return [...processes.values()].find(
+    (p) => p.exitCode === null && p.cwd === cwd && p.command.trim().toLowerCase() === key
+  )
+}
 
 const LogsArgs = z.object({
   id: z.string().optional(),
@@ -75,7 +117,7 @@ export const processTools: RegisteredTool[] = [
   {
     name: 'proc_start',
     description:
-      'Start a long-running command (dev server, watcher) in the background and return startup logs plus any detected http://localhost URL. Use for `npm run dev`, `npm start`, `vite`. Commands must be non-interactive (pass flags like -y). Use shell_run for commands that finish, such as `npm install`.',
+      'Start a long-running command (dev server, watcher) in the background and return startup logs plus any detected http://localhost URL. Use for `npm run dev`, `npm start`, `vite`. If the same command is already running in that folder it is reused (same port) — pass restart:true to force a fresh one. Commands must be non-interactive. Use shell_run for commands that finish, such as `npm install`.',
     risk: 'risky',
     timeoutMs: 130_000,
     parameters: StartArgs,
@@ -84,7 +126,8 @@ export const processTools: RegisteredTool[] = [
       properties: {
         command: { type: 'string' },
         cwd: { type: 'string', description: 'Working directory (defaults to workspace)' },
-        waitMs: { type: 'number', description: 'Startup watch window in ms (default 25000)' }
+        waitMs: { type: 'number', description: 'Startup watch window in ms (default 25000)' },
+        restart: { type: 'boolean', description: 'Restart instead of reusing a running process' }
       },
       required: ['command']
     },
@@ -103,6 +146,20 @@ export const processTools: RegisteredTool[] = [
           if (err instanceof WorkspaceError) return errResult(err.message)
           throw err
         }
+
+        const existing = findRunning(args.command, cwd)
+        if (existing && !args.restart) {
+          return okResult(
+            `Already running (${existing.id})${existing.url ? ` at ${existing.url}` : ''} — reusing it.\n\n${tailOf(existing.logs, 20)}`,
+            {
+              processId: existing.id,
+              previewUrl: existing.url ?? undefined,
+              running: true,
+              reused: true
+            }
+          )
+        }
+        if (existing) stopProcess(existing.id)
 
         counter += 1
         const id = `p${counter}`
@@ -207,11 +264,9 @@ export const processTools: RegisteredTool[] = [
         stopAllProcesses()
         return okResult(`Stopped ${n} process(es)`)
       }
-      const proc = processes.get(args.id)
-      if (!proc) return errResult(`No process ${args.id}`)
-      killTree(proc)
-      processes.delete(args.id)
-      return okResult(`Stopped ${args.id}`)
+      return stopProcess(args.id)
+        ? okResult(`Stopped ${args.id}`)
+        : errResult(`No process ${args.id}`)
     }
   }
 ]

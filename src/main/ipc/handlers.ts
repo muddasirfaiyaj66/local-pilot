@@ -60,6 +60,14 @@ export function registerIpcHandlers(store: SettingsStore): void {
       }
     }
   )
+  ipcMain.handle(IpcChannels.procList, async () => {
+    const { listProcesses } = await import('../tools/process')
+    return listProcesses()
+  })
+  ipcMain.handle(IpcChannels.procStop, async (_e, id: string) => {
+    const { stopProcess } = await import('../tools/process')
+    return { ok: stopProcess(id) }
+  })
   ipcMain.removeHandler(IpcChannels.dialogOpenFolder)
   ipcMain.handle(IpcChannels.dialogOpenFolder, async (event): Promise<string | null> => {
     try {

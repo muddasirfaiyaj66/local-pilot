@@ -2,6 +2,17 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.12.0] — 2026-09-21
+
+### Added
+
+- Running servers are visible and stoppable: a port chip with a stop button in the title bar, and a list in the App preview tab where each entry can be previewed or stopped
+
+### Changed
+
+- Starting a dev server that is already running reuses it instead of spawning another on a new port (pass `restart: true` to force a fresh one)
+- Agent work rules: read before editing, keep one dev server, verify with evidence from logs or the page, and state what is unverified rather than declaring success
+
 ## [0.11.0] — 2026-09-21
 
 ### Added
