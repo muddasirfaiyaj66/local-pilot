@@ -201,7 +201,7 @@ export function Composer({
                 value={settings?.permissionMode ?? 'ask-risky'}
                 onChange={(e) => void setPermissionMode(e.target.value as PermissionMode)}
                 className="lp-select"
-                title="Ctrl/Cmd+Shift+Esc stops the agent"
+                title="Ctrl/Cmd+Shift+. stops all agents"
               >
                 {MODES.map((m) => (
                   <option key={m.id} value={m.id}>

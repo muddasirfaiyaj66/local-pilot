@@ -30,7 +30,7 @@ LocalPilot is an Electron desktop app that pairs a chat UI with an agent loop. Y
 - **MCP** — stdio servers from `mcp.json` in app userData; `mcp_reload` refreshes tools
 - **Memory** — SQLite notes (`memory_*`) and task history (`node:sqlite`)
 - **Diff review** — Keep / Undo for agent file changes; attachments; context/token meter
-- **Safety** — permission modes, Approve/Deny previews, audit log with secret redaction, kill switch `Ctrl/Cmd+Shift+Esc`
+- **Safety** — permission modes, Approve/Deny previews, audit log with secret redaction, kill switch `Ctrl/Cmd+Shift+.`
 
 ## Requirements
 
@@ -104,7 +104,7 @@ design-system/        UI tokens
 
 - Permission modes: **Ask always** · **Ask risky** (default) · **Autonomous**
 - Risky / critical actions (posts, deletes, shell outside workspace, MCP, media writes) require preview + Approve / Deny
-- Global kill switch: `Ctrl/Cmd+Shift+Esc` (stops all agents)
+- Global kill switch: `Ctrl/Cmd+Shift+.` (stops all agents; Windows cannot use Ctrl+Shift+Esc — reserved for Task Manager)
 - Page, file, and screenshot text is treated as data, not instructions
 - API keys and passwords are not sent to models; secrets are redacted in logs
 

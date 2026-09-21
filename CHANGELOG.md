@@ -2,6 +2,12 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.8.6] — 2026-09-21
+
+### Fixed
+
+- Kill switch registers on Windows — `Ctrl+Shift+Esc` is reserved for Task Manager; use `Ctrl/Cmd+Shift+.` (with fallbacks)
+
 ## [0.8.5] — 2026-09-21
 
 ### Changed

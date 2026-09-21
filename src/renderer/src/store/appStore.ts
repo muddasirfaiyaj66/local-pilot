@@ -474,7 +474,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     window.localpilot.onAgentKill(() => {
       void get().stopAllAgents()
-      set({ error: 'Kill switch: all agents stopped (Ctrl/Cmd+Shift+Esc)' })
+      set({ error: 'Kill switch: all agents stopped (Ctrl/Cmd+Shift+.)' })
     })
   },
 
