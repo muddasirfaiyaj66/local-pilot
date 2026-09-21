@@ -14,12 +14,12 @@ export function TaskSidebar(): React.JSX.Element {
 
   return (
     <aside
-      className="flex w-[210px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]"
-      aria-label="Chat history"
+      className="flex w-[200px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]"
+      aria-label="Agents"
     >
       <div className="flex h-8 items-center justify-between px-2.5">
         <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-text-faint)]">
-          Chats
+          Agents
           {runningCount > 0 ? (
             <span className="ml-1.5 normal-case tracking-normal text-[var(--color-accent)]">
               · {runningCount}

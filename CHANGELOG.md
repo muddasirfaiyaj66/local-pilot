@@ -2,6 +2,12 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.8.5] — 2026-09-21
+
+### Changed
+
+- Agent UI follows a Cursor-style transcript pattern: collapsible Thought and tool-exploration blocks in chat, user bubbles, denser Agents sidebar, mode pill in the title bar, and a compact Screen/Log context pane
+
 ## [0.8.4] — 2026-09-21
 
 ### Fixed

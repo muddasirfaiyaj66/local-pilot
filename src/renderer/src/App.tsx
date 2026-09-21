@@ -120,7 +120,13 @@ export default function App(): React.JSX.Element {
               <span className="text-[12px] font-medium tracking-tight text-[var(--color-text)]">
                 LocalPilot
               </span>
-              <span className="text-[10px] text-[var(--color-text-faint)]">{modeLabel}</span>
+              <span
+                className={
+                  interactionMode === 'agent' ? 'lp-mode-pill is-agent' : 'lp-mode-pill'
+                }
+              >
+                {modeLabel}
+              </span>
               <RunningAgentsBadge />
               <div className="flex-1" />
               <WorkspaceChip />
