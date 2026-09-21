@@ -16,9 +16,7 @@
 
 ## Status
 
-**Phase 5** — Media (ffmpeg/sharp), MCP stdio client, SQLite memory notes + task history.
-
-Phase 6: packaging, CI matrix, auto-update. See [Roadmap](#roadmap).
+**Phase 6 complete** — packaging, 3-OS CI, GitHub Releases auto-update, release docs.
 
 ## Screenshots / brand
 
@@ -109,7 +107,7 @@ design-system/        UI tokens (UI UX Pro Max)
 | 3 | Playwright browser (persistent profile), post approval | ✅ |
 | 4 | Screen control, vision grounding, live preview | ✅ |
 | 5 | Media (ffmpeg/sharp), MCP client, SQLite memory | ✅ |
-| 6 | Packaging, CI matrix, auto-update, docs polish | Next |
+| 6 | Packaging, CI matrix, auto-update, docs polish | ✅ |
 
 ## Safety
 
@@ -141,8 +139,12 @@ Then restart LocalPilot or ask the agent to run `mcp_reload`.
 
 - Anthropic / Gemini kinds use OpenAI-compatible gateways only
 - Chat history is in-memory for the session
-- Installer CI matrix lands in Phase 6
+- Auto-update requires a published GitHub Release matching `package.json` version
 - Prefer DOM/browser tools over pixel clicking when possible
+
+## Packaging
+
+See [docs/RELEASE.md](docs/RELEASE.md) for installers and publishing updates.
 
 ## Contributing
 

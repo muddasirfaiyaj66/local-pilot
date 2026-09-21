@@ -31,7 +31,8 @@ export const IpcChannels = {
   agentKill: 'agent:kill',
   screenPreview: 'screen:preview',
   appGetVersion: 'app:get-version',
-  appGetPlatform: 'app:get-platform'
+  appGetPlatform: 'app:get-platform',
+  appCheckUpdates: 'app:check-updates'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
@@ -70,9 +71,16 @@ export interface AskResponse {
   answer: string
 }
 
+export interface UpdateCheckResult {
+  status: 'dev' | 'checking' | 'available' | 'not-available' | 'error'
+  version?: string
+  message?: string
+}
+
 export interface LocalPilotApi {
   getVersion: () => Promise<string>
   getPlatform: () => Promise<string>
+  checkForUpdates: () => Promise<UpdateCheckResult>
   getSettings: () => Promise<AppSettings>
   setSettings: (partial: Partial<AppSettings>) => Promise<AppSettings>
   listProviders: () => Promise<ProviderConfig[]>

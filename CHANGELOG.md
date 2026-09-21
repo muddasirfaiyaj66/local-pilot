@@ -2,6 +2,14 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.6.0] — 2026-09-21
+
+### Added
+
+- Cross-OS CI matrix (Ubuntu / Windows / macOS) with packaged `--dir` artifacts
+- `electron-updater` auto-update from GitHub Releases + Settings “Check for updates”
+- Release docs (`docs/RELEASE.md`); packaging config polish (icons, asarUnpack for natives)
+
 ## [0.5.0] — 2026-09-21
 
 ### Added

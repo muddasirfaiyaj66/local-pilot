@@ -6,7 +6,8 @@ import {
   type ChatChunkEvent,
   type LocalPilotApi,
   type PermissionResponse,
-  type ProviderUpsertInput
+  type ProviderUpsertInput,
+  type UpdateCheckResult
 } from '../shared/ipc'
 import type { AgentStartRequest } from '../shared/agent'
 import type { AppSettings, ChatRequest, ProviderConfig, TestConnectionResult } from '../shared/types'
@@ -14,6 +15,8 @@ import type { AppSettings, ChatRequest, ProviderConfig, TestConnectionResult } f
 const api: LocalPilotApi = {
   getVersion: () => ipcRenderer.invoke(IpcChannels.appGetVersion) as Promise<string>,
   getPlatform: () => ipcRenderer.invoke(IpcChannels.appGetPlatform) as Promise<string>,
+  checkForUpdates: () =>
+    ipcRenderer.invoke(IpcChannels.appCheckUpdates) as Promise<UpdateCheckResult>,
   getSettings: () => ipcRenderer.invoke(IpcChannels.settingsGet) as Promise<AppSettings>,
   setSettings: (partial) =>
     ipcRenderer.invoke(IpcChannels.settingsSet, partial) as Promise<AppSettings>,

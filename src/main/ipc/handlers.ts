@@ -27,6 +27,10 @@ const activeAgents = new Map<
 export function registerIpcHandlers(store: SettingsStore): void {
   ipcMain.handle(IpcChannels.appGetVersion, () => app.getVersion())
   ipcMain.handle(IpcChannels.appGetPlatform, () => process.platform)
+  ipcMain.handle(IpcChannels.appCheckUpdates, async () => {
+    const { checkForUpdatesNow } = await import('../updater')
+    return checkForUpdatesNow()
+  })
   ipcMain.handle(IpcChannels.settingsGet, () => store.getSettings())
   ipcMain.handle(
     IpcChannels.settingsSet,

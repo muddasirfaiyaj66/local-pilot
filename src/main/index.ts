@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { SettingsStore } from './settings'
 import { abortAllStreams, registerIpcHandlers } from './ipc/handlers'
 import { registerKillSwitch, unregisterKillSwitch } from './safety/killswitch'
+import { setupAutoUpdater } from './updater'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -78,6 +79,7 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+  setupAutoUpdater(() => mainWindow)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

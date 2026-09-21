@@ -1,5 +1,5 @@
 import { CheckCircle, Plus, WarningCircle } from '@phosphor-icons/react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAppStore } from '../store/appStore'
 import type { ProviderConfig, ProviderKind } from '@shared/types'
 
@@ -17,9 +17,32 @@ export function SettingsPage(): React.JSX.Element {
   const testProvider = useAppStore((s) => s.testProvider)
   const testResult = useAppStore((s) => s.testResult)
 
+  const [appVersion, setAppVersion] = useState('')
+  const [updateMsg, setUpdateMsg] = useState<string | null>(null)
+  const [updateBusy, setUpdateBusy] = useState(false)
+
   const setWorkspace = async (workspacePath: string): Promise<void> => {
     const next = await window.localpilot.setSettings({ workspacePath })
     useAppStore.setState({ settings: next })
+  }
+
+  useEffect(() => {
+    void window.localpilot.getVersion().then(setAppVersion)
+  }, [])
+
+  const onCheckUpdates = async (): Promise<void> => {
+    setUpdateBusy(true)
+    setUpdateMsg(null)
+    try {
+      const result = await window.localpilot.checkForUpdates()
+      if (result.status === 'dev') setUpdateMsg(result.message ?? 'Dev build — updates disabled')
+      else if (result.status === 'available')
+        setUpdateMsg(`Update ${result.version ?? ''} available — downloading…`)
+      else if (result.status === 'not-available') setUpdateMsg('You are on the latest version.')
+      else setUpdateMsg(result.message ?? 'Update check failed')
+    } finally {
+      setUpdateBusy(false)
+    }
   }
 
   const [selectedId, setSelectedId] = useState(providers[0]?.id ?? '')
@@ -123,9 +146,29 @@ export function SettingsPage(): React.JSX.Element {
           <input
             value={settings?.workspacePath ?? ''}
             onChange={(e) => void setWorkspace(e.target.value)}
-            placeholder="Path sandboxed for file tools (Phase 2)"
+            placeholder="Path sandboxed for file tools"
             className="lp-input"
           />
+        </section>
+
+        <section className="mt-8 max-w-lg space-y-3">
+          <h2 className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-faint)]">
+            About & updates
+          </h2>
+          <p className="text-[13px] text-[var(--color-text-muted)]">
+            LocalPilot {appVersion || '…'} — updates from GitHub Releases when packaged.
+          </p>
+          <button
+            type="button"
+            disabled={updateBusy}
+            onClick={() => void onCheckUpdates()}
+            className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)] disabled:opacity-40"
+          >
+            {updateBusy ? 'Checking…' : 'Check for updates'}
+          </button>
+          {updateMsg && (
+            <p className="text-[13px] text-[var(--color-text-muted)]">{updateMsg}</p>
+          )}
         </section>
 
         <section className="mt-8 max-w-lg space-y-3">

@@ -8,7 +8,11 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -16,6 +20,42 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci
+      - name: Install Linux Electron deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 xdg-utils libatspi2.0-0 libuuid1 libsecret-1-0
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  pack:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            args: --linux AppImage --dir
+          - os: windows-latest
+            args: --win --dir
+          - os: macos-latest
+            args: --mac --dir
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Install Linux Electron deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 xdg-utils libatspi2.0-0 libuuid1 libsecret-1-0 rpm fuse
+      - run: npm run build
+      - name: Package (dir)
+        run: npx electron-builder ${{ matrix.args }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

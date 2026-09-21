@@ -16,11 +16,14 @@ files:
   - '!design-system/**'
   - '!.cursor/**'
   - '!.github/**'
+  - '!.localpilot-memory/**'
 extraResources:
-  - from: resources/icon.png
+  - from: build/icon.png
     to: icon.png
 asarUnpack:
-  - resources/**
+  - '**/ffmpeg-static/**'
+  - '**/sharp/**'
+  - '**/*.node'
 win:
   icon: build/icon.png
   target:
@@ -44,3 +47,5 @@ nsis:
   uninstallerIcon: build/icon.png
 publish:
   provider: github
+  owner: muddasirfaiyaj66
+  repo: local-pilot
