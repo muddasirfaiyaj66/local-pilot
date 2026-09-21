@@ -2,6 +2,12 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.8.4] — 2026-09-21
+
+### Fixed
+
+- Agent no longer hangs forever on “Thinking…” after tool writes — model stream idle/total timeouts, clearer waiting status, Ollama tool-call message format for multi-turn cloud models, post-write continue nudge
+
 ## [0.8.3] — 2026-09-21
 
 ### Changed

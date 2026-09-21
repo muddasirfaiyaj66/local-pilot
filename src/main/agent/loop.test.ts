@@ -231,4 +231,19 @@ describe('runAgentLoop', () => {
       rmSync(ws, { recursive: true, force: true })
     }
   })
+
+  it('watchdog fails a hung model stream instead of stalling forever', async () => {
+    const { chatWithWatchdog } = await import('./loop')
+    async function* hanging(): AsyncGenerator<ChatStreamChunk, void, unknown> {
+      yield { type: 'text', text: 'partial' }
+      await new Promise(() => undefined) // never resolves
+    }
+    await expect(async () => {
+      const out: string[] = []
+      for await (const c of chatWithWatchdog(hanging(), undefined, 50, 200)) {
+        if (c.type === 'text') out.push(c.text)
+      }
+      void out
+    }).rejects.toThrow(/stopped responding|timed out/i)
+  })
 })

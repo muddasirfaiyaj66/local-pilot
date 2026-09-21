@@ -12,8 +12,19 @@ export function MessageList(): React.JSX.Element {
   const openWorkspace = useAppStore((s) => s.openWorkspace)
   const plan = useAppStore((s) => s.plan)
   const settings = useAppStore((s) => s.settings)
+  const pendingPermission = useAppStore((s) => s.pendingPermission)
+  const timeline = useAppStore((s) => s.timeline)
   const bottomRef = useRef<HTMLDivElement>(null)
   const hasWorkspace = Boolean(settings?.workspacePath?.trim())
+
+  const lastTimeline = timeline[timeline.length - 1]
+  const agentBusyLabel = pendingPermission
+    ? 'Waiting for your approval…'
+    : lastTimeline?.kind === 'tool'
+      ? `Running ${lastTimeline.text.split(' ')[0] ?? 'tool'}…`
+      : lastTimeline?.kind === 'result'
+        ? 'Waiting for model…'
+        : 'Waiting for model…'
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -128,7 +139,7 @@ export function MessageList(): React.JSX.Element {
               </div>
               <div className="whitespace-pre-wrap break-words text-[13px] leading-[1.65]">
                 {streamingText || (
-                  <span className="text-[var(--color-text-muted)]">Thinking…</span>
+                  <span className="text-[var(--color-text-muted)]">{agentBusyLabel}</span>
                 )}
               </div>
             </div>

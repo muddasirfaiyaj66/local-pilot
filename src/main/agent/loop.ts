@@ -6,7 +6,7 @@ import {
   type PermissionRequest,
   type ToolResult
 } from '@shared/agent'
-import type { PermissionMode, ToolCall } from '@shared/types'
+import type { PermissionMode, ToolCall, ChatStreamChunk } from '@shared/types'
 import type { ModelProvider, ProviderChatMessage } from '../providers/base'
 import { appendAudit } from '../safety/audit'
 import { classifyToolRisk, shouldAutoAllow } from '../safety/permissions'
@@ -39,6 +39,10 @@ export interface AgentLoopResult {
 const MAX_TOOL_RETRIES = 3
 /** Plan mode: at most this many inspect tools before forcing a written plan. */
 const PLAN_MAX_INSPECT_STEPS = 2
+/** Abort a model turn if the full stream exceeds this (prevents infinite "Thinking…"). */
+const MODEL_TURN_TIMEOUT_MS = 120_000
+/** Abort if the stream goes silent this long between chunks. */
+const MODEL_IDLE_TIMEOUT_MS = 75_000
 
 export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopResult> {
   const workspacePath = opts.workspacePath.trim()
@@ -119,13 +123,15 @@ ${modeHint}`
     const toolCalls: ToolCall[] = []
     const turnTools = forcePlanText ? undefined : tools
 
+    opts.onEvent({ type: 'status', status: 'running' })
+
     try {
-      for await (const chunk of opts.provider.chat({
+      for await (const chunk of chatWithWatchdog(opts.provider.chat({
         messages,
         tools: turnTools,
         stream: true,
         signal: opts.signal
-      })) {
+      }), opts.signal)) {
         if (opts.signal?.aborted) break
         if (chunk.type === 'text') {
           assistantText += chunk.text
@@ -143,6 +149,7 @@ ${modeHint}`
         } else if (chunk.type === 'error') {
           opts.onEvent({ type: 'error', message: chunk.message })
           opts.onEvent({ type: 'status', status: 'failed' })
+          opts.onEvent({ type: 'done', summary: chunk.message })
           return { status: 'failed', summary: chunk.message, plan }
         }
       }
@@ -154,6 +161,7 @@ ${modeHint}`
       const message = err instanceof Error ? err.message : String(err)
       opts.onEvent({ type: 'error', message })
       opts.onEvent({ type: 'status', status: 'failed' })
+      opts.onEvent({ type: 'done', summary: message })
       return { status: 'failed', summary: message, plan }
     }
 
@@ -227,6 +235,16 @@ ${modeHint}`
           (result.ok && /\(empty directory\)/i.test(result.output)
             ? 'The workspace is empty — proceed by creating files with fs_write (and related tools).'
             : 'Use a different approach or finish with a short summary.')
+      })
+    } else if (
+      result.ok &&
+      (call.name === 'fs_write' || call.name === 'fs_edit' || call.name === 'code_apply_patch')
+    ) {
+      // Nudge so cloud models don't hang silently after writing a file.
+      messages.push({
+        role: 'user',
+        content:
+          'File change applied. Continue with the next concrete step (another write/edit/shell) or finish with a short summary. Do not stall.'
       })
     }
   }
@@ -401,4 +419,78 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
       }
     )
   })
+}
+
+/**
+ * Wrap a provider stream so a hung Ollama/cloud turn cannot leave the UI on "Thinking…" forever.
+ * Each wait for the next chunk races idle + remaining total-turn budget.
+ */
+export async function* chatWithWatchdog(
+  source: AsyncGenerator<ChatStreamChunk, void, unknown>,
+  outerSignal?: AbortSignal,
+  idleMs = MODEL_IDLE_TIMEOUT_MS,
+  totalMs = MODEL_TURN_TIMEOUT_MS
+): AsyncGenerator<ChatStreamChunk, void, unknown> {
+  type Step =
+    | { kind: 'chunk'; value: ChatStreamChunk }
+    | { kind: 'end' }
+    | { kind: 'timeout'; reason: 'idle' | 'total' }
+    | { kind: 'error'; error: unknown }
+
+  const iterator = source[Symbol.asyncIterator]()
+  const started = Date.now()
+
+  try {
+    while (true) {
+      if (outerSignal?.aborted) {
+        throw new Error('Aborted')
+      }
+      const remaining = totalMs - (Date.now() - started)
+      if (remaining <= 0) {
+        throw new Error(
+          `Model turn timed out after ${Math.round(totalMs / 1000)}s. Stop and retry, or switch models.`
+        )
+      }
+      const waitMs = Math.min(idleMs, remaining)
+
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeoutPromise = new Promise<Step>((resolve) => {
+        timer = setTimeout(() => {
+          resolve({
+            kind: 'timeout',
+            reason: waitMs >= remaining ? 'total' : 'idle'
+          })
+        }, waitMs)
+      })
+
+      const nextPromise: Promise<Step> = iterator.next().then(
+        (r) => (r.done ? { kind: 'end' as const } : { kind: 'chunk' as const, value: r.value }),
+        (error: unknown) => ({ kind: 'error' as const, error })
+      )
+
+      const step = await Promise.race([nextPromise, timeoutPromise])
+      if (timer) clearTimeout(timer)
+
+      if (step.kind === 'timeout') {
+        void iterator.return?.(undefined)
+        if (step.reason === 'total') {
+          throw new Error(
+            `Model turn timed out after ${Math.round(totalMs / 1000)}s. Stop and retry, or switch models.`
+          )
+        }
+        throw new Error(
+          `Model stopped responding for ${Math.round(idleMs / 1000)}s after a tool call. Stop and retry, or switch models.`
+        )
+      }
+      if (step.kind === 'error') {
+        void iterator.return?.(undefined)
+        throw step.error
+      }
+      if (step.kind === 'end') return
+      yield step.value
+    }
+  } finally {
+    // Do not await return() — a hung upstream next() would block cleanup forever.
+    void iterator.return?.(undefined)
+  }
 }

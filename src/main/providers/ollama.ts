@@ -197,9 +197,12 @@ function toOllamaMessage(msg: ProviderChatMessage): Record<string, unknown> {
       role: 'assistant',
       content: msg.content || '',
       tool_calls: msg.toolCalls.map((tc) => ({
+        id: tc.id,
+        type: 'function',
         function: {
           name: tc.name,
-          arguments: tc.arguments
+          // Ollama accepts object or JSON string; object is preferred for native /api/chat
+          arguments: tc.arguments ?? {}
         }
       }))
     }
@@ -208,7 +211,8 @@ function toOllamaMessage(msg: ProviderChatMessage): Record<string, unknown> {
     return {
       role: 'tool',
       content: msg.content,
-      ...(msg.toolName ? { name: msg.toolName } : {})
+      ...(msg.toolName ? { tool_name: msg.toolName } : {}),
+      ...(msg.toolCallId ? { tool_call_id: msg.toolCallId } : {})
     }
   }
   const base: Record<string, unknown> = { role: msg.role, content: msg.content }
