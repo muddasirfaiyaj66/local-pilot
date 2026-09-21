@@ -27,6 +27,8 @@ export function Composer({
   onKeyDown,
   canSend
 }: ComposerProps): React.JSX.Element {
+  const interactionMode = useAppStore((s) => s.interactionMode)
+  const setInteractionMode = useAppStore((s) => s.setInteractionMode)
   const providers = useAppStore((s) => s.providers)
   const settings = useAppStore((s) => s.settings)
   const isStreaming = useAppStore((s) => s.isStreaming)
@@ -52,15 +54,29 @@ export function Composer({
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
           rows={3}
-          placeholder="Plan, search, build anything…"
+          placeholder={
+            interactionMode === 'agent'
+              ? 'Give the agent a goal (needs workspace in Settings)…'
+              : 'Chat with the model…'
+          }
           className="min-h-[64px] w-full resize-none border-0 bg-transparent px-3.5 pt-3 pb-1 text-[13px] leading-relaxed text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-faint)]"
         />
-        <div className="flex items-center gap-1 px-2 pb-2">
+        <div className="flex flex-wrap items-center gap-1 px-2 pb-2">
+          <select
+            aria-label="Interaction mode"
+            value={interactionMode}
+            onChange={(e) => setInteractionMode(e.target.value as 'chat' | 'agent')}
+            className="lp-select"
+          >
+            <option value="agent">Agent</option>
+            <option value="chat">Chat</option>
+          </select>
+
           <select
             aria-label="Model provider"
             value={activeId}
             onChange={(e) => void setActiveProvider(e.target.value)}
-            className="lp-select max-w-[200px] truncate"
+            className="lp-select max-w-[180px] truncate"
           >
             {providers.map((p) => (
               <option key={p.id} value={p.id}>
@@ -74,7 +90,7 @@ export function Composer({
             value={settings?.permissionMode ?? 'ask-risky'}
             onChange={(e) => void setPermissionMode(e.target.value as PermissionMode)}
             className="lp-select"
-            title="Enforced in Phase 2"
+            title="Ctrl/Cmd+Shift+Esc stops the agent"
           >
             {MODES.map((m) => (
               <option key={m.id} value={m.id}>
@@ -90,7 +106,7 @@ export function Composer({
               type="button"
               className="lp-stop"
               onClick={() => void stopStreaming()}
-              aria-label="Stop generation"
+              aria-label="Stop"
             >
               <Stop size={12} weight="fill" aria-hidden />
               Stop

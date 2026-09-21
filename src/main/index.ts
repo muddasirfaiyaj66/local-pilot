@@ -3,12 +3,11 @@ import { join } from 'node:path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { SettingsStore } from './settings'
 import { abortAllStreams, registerIpcHandlers } from './ipc/handlers'
+import { registerKillSwitch, unregisterKillSwitch } from './safety/killswitch'
 
 let mainWindow: BrowserWindow | null = null
-let settingsStore: SettingsStore | null = null
 
 function resolveIconPath(): string {
-  // Dev: repo build/; Prod: resources next to asar
   if (is.dev) {
     return join(app.getAppPath(), 'build', 'icon.png')
   }
@@ -57,8 +56,15 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  settingsStore = new SettingsStore()
+  const settingsStore = new SettingsStore()
   registerIpcHandlers(settingsStore)
+  registerKillSwitch(() => {
+    abortAllStreams()
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  })
   createWindow()
 
   app.on('activate', () => {
@@ -68,6 +74,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   abortAllStreams()
+  unregisterKillSwitch()
   if (process.platform !== 'darwin') {
     app.quit()
   }
@@ -75,4 +82,5 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   abortAllStreams()
+  unregisterKillSwitch()
 })

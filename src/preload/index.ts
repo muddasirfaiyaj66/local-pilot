@@ -1,10 +1,14 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import {
   IpcChannels,
+  type AgentEventPayload,
+  type AskResponse,
   type ChatChunkEvent,
   type LocalPilotApi,
+  type PermissionResponse,
   type ProviderUpsertInput
 } from '../shared/ipc'
+import type { AgentStartRequest } from '../shared/agent'
 import type { AppSettings, ChatRequest, ProviderConfig, TestConnectionResult } from '../shared/types'
 
 const api: LocalPilotApi = {
@@ -31,6 +35,31 @@ const api: LocalPilotApi = {
     ipcRenderer.on(IpcChannels.chatChunk, listener)
     return () => {
       ipcRenderer.removeListener(IpcChannels.chatChunk, listener)
+    }
+  },
+  startAgent: (request: AgentStartRequest) =>
+    ipcRenderer.invoke(IpcChannels.agentStart, request) as Promise<{ requestId: string }>,
+  abortAgent: (requestId) => ipcRenderer.invoke(IpcChannels.agentAbort, requestId) as Promise<void>,
+  respondPermission: (response: PermissionResponse) =>
+    ipcRenderer.invoke(IpcChannels.agentPermissionRespond, response) as Promise<void>,
+  respondAsk: (response: AskResponse) =>
+    ipcRenderer.invoke(IpcChannels.agentAskRespond, response) as Promise<void>,
+  onAgentEvent: (handler) => {
+    const listener = (_event: IpcRendererEvent, data: AgentEventPayload): void => {
+      handler(data)
+    }
+    ipcRenderer.on(IpcChannels.agentEvent, listener)
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.agentEvent, listener)
+    }
+  },
+  onAgentKill: (handler) => {
+    const listener = (): void => {
+      handler()
+    }
+    ipcRenderer.on(IpcChannels.agentKill, listener)
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.agentKill, listener)
     }
   }
 }

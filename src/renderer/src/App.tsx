@@ -6,6 +6,7 @@ import { TaskSidebar } from './components/TaskSidebar'
 import { MessageList } from './components/MessageList'
 import { LivePreviewPane } from './components/LivePreviewPane'
 import { Composer } from './components/Composer'
+import { PermissionModal } from './components/PermissionModal'
 import logoMark from './assets/logo-mark.svg'
 
 export default function App(): React.JSX.Element {
@@ -103,7 +104,7 @@ export default function App(): React.JSX.Element {
               <img src={logoMark} alt="" width={16} height={16} className="rounded-[3px]" />
               <span className="text-[12px] font-medium text-[var(--color-text)]">LocalPilot</span>
               <span className="text-[var(--color-text-faint)]">·</span>
-              <span className="text-[12px] text-[var(--color-text-muted)]">Agent · Phase 1</span>
+              <span className="text-[12px] text-[var(--color-text-muted)]">Agent · Phase 2</span>
             </div>
             <MessageList />
             <Composer
@@ -118,6 +119,7 @@ export default function App(): React.JSX.Element {
           <LivePreviewPane />
         </>
       )}
+      <PermissionModal />
     </div>
   )
 }

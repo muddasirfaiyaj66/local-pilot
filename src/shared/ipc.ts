@@ -5,6 +5,11 @@ import type {
   ProviderConfig,
   TestConnectionResult
 } from './schemas'
+import type {
+  AgentEvent,
+  AgentStartRequest,
+  PermissionRequest
+} from './agent'
 
 /** IPC channel names — single source of truth for main/preload/renderer */
 export const IpcChannels = {
@@ -18,6 +23,12 @@ export const IpcChannels = {
   chatStart: 'chat:start',
   chatAbort: 'chat:abort',
   chatChunk: 'chat:chunk',
+  agentStart: 'agent:start',
+  agentAbort: 'agent:abort',
+  agentEvent: 'agent:event',
+  agentPermissionRespond: 'agent:permission-respond',
+  agentAskRespond: 'agent:ask-respond',
+  agentKill: 'agent:kill',
   appGetVersion: 'app:get-version',
   appGetPlatform: 'app:get-platform'
 } as const
@@ -38,6 +49,26 @@ export interface ChatChunkEvent {
   chunk: ChatStreamChunk
 }
 
+export interface AgentStartResult {
+  requestId: string
+}
+
+export interface AgentEventPayload {
+  requestId: string
+  event: AgentEvent
+}
+
+export interface PermissionResponse {
+  requestId: string
+  permissionId: string
+  allow: boolean
+}
+
+export interface AskResponse {
+  requestId: string
+  answer: string
+}
+
 export interface LocalPilotApi {
   getVersion: () => Promise<string>
   getPlatform: () => Promise<string>
@@ -51,4 +82,12 @@ export interface LocalPilotApi {
   startChat: (request: ChatRequest) => Promise<ChatStartResult>
   abortChat: (requestId: string) => Promise<void>
   onChatChunk: (handler: (event: ChatChunkEvent) => void) => () => void
+  startAgent: (request: AgentStartRequest) => Promise<AgentStartResult>
+  abortAgent: (requestId: string) => Promise<void>
+  respondPermission: (response: PermissionResponse) => Promise<void>
+  respondAsk: (response: AskResponse) => Promise<void>
+  onAgentEvent: (handler: (payload: AgentEventPayload) => void) => () => void
+  onAgentKill: (handler: () => void) => () => void
 }
+
+export type { AgentStartRequest, PermissionRequest }

@@ -2,6 +2,18 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.2.0] — 2026-09-21
+
+### Added
+
+- Agent loop (plan → observe → one tool → verify) with mock-provider tests
+- Tools: fs (read/write/edit/list/search/move/delete), shell_run, code (git/tests/index/patch), ask_user
+- Permission modes enforced with Approve/Deny preview modal
+- Global kill switch Ctrl/Cmd+Shift+Esc
+- Audit log (JSONL) with secret redaction
+- Action timeline + plan panel in the UI
+- Workspace sandbox for file operations
+
 ## [0.1.0] — 2026-09-21
 
 ### Added

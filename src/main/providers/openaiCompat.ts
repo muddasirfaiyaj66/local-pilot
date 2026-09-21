@@ -179,6 +179,13 @@ export class OpenAICompatProvider implements ModelProvider {
 }
 
 function toOpenAIMessage(msg: ProviderChatMessage): Record<string, unknown> {
+  if (msg.role === 'tool') {
+    return {
+      role: 'tool',
+      content: msg.content,
+      tool_call_id: msg.toolCallId ?? 'tool_call'
+    }
+  }
   if (msg.images && msg.images.length > 0 && msg.role === 'user') {
     return {
       role: 'user',

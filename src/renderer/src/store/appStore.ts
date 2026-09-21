@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { AgentPlan, PermissionRequest } from '@shared/agent'
 import type {
   AppSettings,
   ChatMessage,
@@ -17,6 +18,14 @@ export interface TaskSummary {
   updatedAt: number
 }
 
+export interface TimelineEntry {
+  id: string
+  kind: 'thought' | 'tool' | 'result' | 'status'
+  text: string
+  at: number
+  ok?: boolean
+}
+
 interface AppState {
   ready: boolean
   version: string
@@ -31,8 +40,14 @@ interface AppState {
   error: string | null
   view: 'chat' | 'settings'
   testResult: TestConnectionResult | null
+  interactionMode: 'chat' | 'agent'
+  plan: AgentPlan | null
+  timeline: TimelineEntry[]
+  pendingPermission: (PermissionRequest & { agentRequestId: string }) | null
+  askDraft: string
   init: () => Promise<void>
   setView: (view: 'chat' | 'settings') => void
+  setInteractionMode: (mode: 'chat' | 'agent') => void
   setPermissionMode: (mode: PermissionMode) => Promise<void>
   setActiveProvider: (id: string) => Promise<void>
   refreshProviders: () => Promise<void>
@@ -45,6 +60,9 @@ interface AppState {
   selectTask: (id: string) => void
   sendMessage: (text: string) => Promise<void>
   stopStreaming: () => Promise<void>
+  respondPermission: (allow: boolean) => Promise<void>
+  respondAsk: (answer: string) => Promise<void>
+  setAskDraft: (v: string) => void
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -52,13 +70,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   version: '',
   settings: null,
   providers: [],
-  tasks: [
-    {
-      id: 'welcome',
-      title: 'Welcome',
-      updatedAt: Date.now()
-    }
-  ],
+  tasks: [{ id: 'welcome', title: 'Welcome', updatedAt: Date.now() }],
   activeTaskId: 'welcome',
   messages: [],
   streamingText: '',
@@ -67,6 +79,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   error: null,
   view: 'chat',
   testResult: null,
+  interactionMode: 'agent',
+  plan: null,
+  timeline: [],
+  pendingPermission: null,
+  askDraft: '',
 
   init: async () => {
     const [version, settings, providers] = await Promise.all([
@@ -75,9 +92,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       window.localpilot.listProviders()
     ])
     set({ version, settings, providers, ready: true })
+
+    window.localpilot.onAgentKill(() => {
+      void get().stopStreaming()
+      set({ error: 'Kill switch: agent stopped (Ctrl/Cmd+Shift+Esc)' })
+    })
   },
 
   setView: (view) => set({ view, testResult: null }),
+  setInteractionMode: (interactionMode) => set({ interactionMode }),
+  setAskDraft: (askDraft) => set({ askDraft }),
 
   setPermissionMode: async (mode) => {
     const settings = await window.localpilot.setSettings({ permissionMode: mode })
@@ -90,8 +114,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   refreshProviders: async () => {
-    const providers = await window.localpilot.listProviders()
-    set({ providers })
+    set({ providers: await window.localpilot.listProviders() })
   },
 
   upsertProvider: async (config, apiKey) => {
@@ -104,65 +127,93 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   testProvider: async (id) => {
-    set({ testResult: null })
-    const result = await window.localpilot.testProvider(id)
-    set({ testResult: result })
+    set({ testResult: await window.localpilot.testProvider(id) })
   },
 
   newTask: () => {
     const id = newId()
-    const task: TaskSummary = { id, title: 'New task', updatedAt: Date.now() }
     set((s) => ({
-      tasks: [task, ...s.tasks],
+      tasks: [{ id, title: 'New task', updatedAt: Date.now() }, ...s.tasks],
       activeTaskId: id,
       messages: [],
       streamingText: '',
       error: null,
+      plan: null,
+      timeline: [],
+      pendingPermission: null,
       view: 'chat'
     }))
   },
 
-  selectTask: (id) => {
-    set({ activeTaskId: id, view: 'chat' })
-  },
+  selectTask: (id) => set({ activeTaskId: id, view: 'chat' }),
 
   stopStreaming: async () => {
-    const { activeRequestId } = get()
+    const { activeRequestId, interactionMode } = get()
     if (activeRequestId) {
-      await window.localpilot.abortChat(activeRequestId)
+      if (interactionMode === 'agent') {
+        await window.localpilot.abortAgent(activeRequestId)
+      } else {
+        await window.localpilot.abortChat(activeRequestId)
+      }
     }
     set((s) => {
       const text = s.streamingText
-      const messages =
-        text.length > 0
-          ? [
-              ...s.messages,
-              {
-                id: newId(),
-                role: 'assistant' as const,
-                content: text + '\n\n_(stopped)_',
-                createdAt: Date.now()
-              }
-            ]
-          : s.messages
       return {
         isStreaming: false,
         activeRequestId: null,
         streamingText: '',
-        messages
+        pendingPermission: null,
+        messages:
+          text.length > 0
+            ? [
+                ...s.messages,
+                {
+                  id: newId(),
+                  role: 'assistant' as const,
+                  content: text + '\n\n_(stopped)_',
+                  createdAt: Date.now()
+                }
+              ]
+            : s.messages
       }
     })
+  },
+
+  respondPermission: async (allow) => {
+    const pending = get().pendingPermission
+    if (!pending) return
+    await window.localpilot.respondPermission({
+      requestId: pending.agentRequestId,
+      permissionId: pending.requestId,
+      allow
+    })
+    set({ pendingPermission: null })
+  },
+
+  respondAsk: async (answer) => {
+    const pending = get().pendingPermission
+    const requestId = get().activeRequestId
+    if (!requestId || !answer.trim()) return
+    await window.localpilot.respondAsk({ requestId, answer: answer.trim() })
+    set({ pendingPermission: null, askDraft: '' })
+    void pending
   },
 
   sendMessage: async (text) => {
     const trimmed = text.trim()
     if (!trimmed || get().isStreaming) return
 
-    const { settings, providers } = get()
+    const { settings, providers, interactionMode } = get()
     const providerId = settings?.activeProviderId ?? providers[0]?.id
     if (!providerId) {
       set({ error: 'No provider configured. Open Settings to add one.' })
       return
+    }
+
+    if (interactionMode === 'agent' && !settings?.workspacePath) {
+      set({
+        error: 'Set a workspace path in Settings before running the agent (file/shell sandbox).'
+      })
     }
 
     const userMsg: ChatMessage = {
@@ -172,82 +223,180 @@ export const useAppStore = create<AppState>((set, get) => ({
       createdAt: Date.now()
     }
 
-    set((s) => {
-      const tasks = s.tasks.map((t) =>
+    set((s) => ({
+      messages: [...s.messages, userMsg],
+      tasks: s.tasks.map((t) =>
         t.id === s.activeTaskId
           ? { ...t, title: trimmed.slice(0, 48) || t.title, updatedAt: Date.now() }
           : t
-      )
-      return {
-        messages: [...s.messages, userMsg],
-        tasks,
-        isStreaming: true,
-        streamingText: '',
-        error: null
-      }
-    })
-
-    const history = get().messages.map((m) => ({
-      role: m.role,
-      content: m.content
+      ),
+      isStreaming: true,
+      streamingText: '',
+      error: null,
+      plan: null,
+      timeline: [],
+      pendingPermission: null
     }))
 
-    let unsubscribe: (() => void) | undefined
-    try {
-      const { requestId } = await window.localpilot.startChat({
-        providerId,
-        messages: history,
-        stream: true
-      })
-
-      set({ activeRequestId: requestId })
-
-      await new Promise<void>((resolve) => {
-        unsubscribe = window.localpilot.onChatChunk((event) => {
-          if (event.requestId !== requestId) return
-          const { chunk } = event
-          if (chunk.type === 'text') {
-            set((s) => ({ streamingText: s.streamingText + chunk.text }))
-          } else if (chunk.type === 'error') {
-            set({ error: chunk.message, isStreaming: false, activeRequestId: null })
-            resolve()
-          } else if (chunk.type === 'done') {
-            set((s) => {
-              const content = s.streamingText
-              return {
-                messages:
-                  content.length > 0
-                    ? [
-                        ...s.messages,
-                        {
-                          id: newId(),
-                          role: 'assistant',
-                          content,
-                          createdAt: Date.now()
-                        }
-                      ]
-                    : s.messages,
-                streamingText: '',
-                isStreaming: false,
-                activeRequestId: null
-              }
-            })
-            resolve()
-          } else if (chunk.type === 'tool_call') {
-            // Phase 1: surface tool calls as visible notes (execution in Phase 2)
-            set((s) => ({
-              streamingText:
-                s.streamingText +
-                `\n\n[tool call: ${chunk.toolCall.name}(${JSON.stringify(chunk.toolCall.arguments)})]\n`
-            }))
-          }
-        })
-      })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      set({ error: message, isStreaming: false, activeRequestId: null })
-    } finally {
-      unsubscribe?.()
+    if (interactionMode === 'agent') {
+      await runAgentGoal(trimmed, providerId, set, get)
+    } else {
+      await runChat(trimmed, providerId, set, get)
     }
   }
 }))
+
+type Set = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void
+type Get = () => AppState
+
+async function runChat(
+  _text: string,
+  providerId: string,
+  set: Set,
+  get: Get
+): Promise<void> {
+  const history = get().messages.map((m) => ({ role: m.role, content: m.content }))
+  let unsubscribe: (() => void) | undefined
+  try {
+    const { requestId } = await window.localpilot.startChat({
+      providerId,
+      messages: history,
+      stream: true
+    })
+    set({ activeRequestId: requestId })
+    await new Promise<void>((resolve) => {
+      unsubscribe = window.localpilot.onChatChunk((event) => {
+        if (event.requestId !== requestId) return
+        const { chunk } = event
+        if (chunk.type === 'text') {
+          set((s) => ({ streamingText: s.streamingText + chunk.text }))
+        } else if (chunk.type === 'error') {
+          set({ error: chunk.message, isStreaming: false, activeRequestId: null })
+          resolve()
+        } else if (chunk.type === 'done') {
+          set((s) => ({
+            messages:
+              s.streamingText.length > 0
+                ? [
+                    ...s.messages,
+                    {
+                      id: newId(),
+                      role: 'assistant',
+                      content: s.streamingText,
+                      createdAt: Date.now()
+                    }
+                  ]
+                : s.messages,
+            streamingText: '',
+            isStreaming: false,
+            activeRequestId: null
+          }))
+          resolve()
+        }
+      })
+    })
+  } catch (err) {
+    set({
+      error: err instanceof Error ? err.message : String(err),
+      isStreaming: false,
+      activeRequestId: null
+    })
+  } finally {
+    unsubscribe?.()
+  }
+}
+
+async function runAgentGoal(goal: string, providerId: string, set: Set, _get: Get): Promise<void> {
+  let unsubscribe: (() => void) | undefined
+  try {
+    const { requestId } = await window.localpilot.startAgent({
+      providerId,
+      goal,
+      maxSteps: 20
+    })
+    set({ activeRequestId: requestId })
+
+    await new Promise<void>((resolve) => {
+      unsubscribe = window.localpilot.onAgentEvent((payload) => {
+        if (payload.requestId !== requestId) return
+        const { event } = payload
+
+        if (event.type === 'plan') {
+          set({ plan: event.plan })
+        } else if (event.type === 'thought') {
+          const entry: TimelineEntry = {
+            id: newId(),
+            kind: 'thought',
+            text: event.text,
+            at: Date.now()
+          }
+          set((s) => ({
+            streamingText: s.streamingText + event.text,
+            timeline: [...s.timeline, entry].slice(-80)
+          }))
+        } else if (event.type === 'tool_start') {
+          const entry: TimelineEntry = {
+            id: newId(),
+            kind: 'tool',
+            text: `${event.toolCall.name} (${event.risk})`,
+            at: Date.now()
+          }
+          set((s) => ({
+            timeline: [...s.timeline, entry].slice(-80)
+          }))
+        } else if (event.type === 'tool_result') {
+          const entry: TimelineEntry = {
+            id: newId(),
+            kind: 'result',
+            text: event.result.ok
+              ? event.result.output.slice(0, 120)
+              : event.result.error ?? 'failed',
+            at: Date.now(),
+            ok: event.result.ok
+          }
+          set((s) => ({
+            timeline: [...s.timeline, entry].slice(-80)
+          }))
+        } else if (event.type === 'permission_required') {
+          set({
+            pendingPermission: { ...event.permission, agentRequestId: requestId }
+          })
+        } else if (event.type === 'error') {
+          set({ error: event.message })
+        } else if (event.type === 'done') {
+          set((s) => ({
+            messages: [
+              ...s.messages,
+              {
+                id: newId(),
+                role: 'assistant',
+                content:
+                  (s.streamingText.trim() || event.summary || 'Agent finished.') +
+                  (event.summary && s.streamingText.trim()
+                    ? `\n\n—\n${event.summary}`
+                    : ''),
+                createdAt: Date.now()
+              }
+            ],
+            streamingText: '',
+            isStreaming: false,
+            activeRequestId: null,
+            pendingPermission: null
+          }))
+          resolve()
+        } else if (event.type === 'status' && event.status === 'stopped') {
+          set({ isStreaming: false, activeRequestId: null, pendingPermission: null })
+          resolve()
+        }
+      })
+    })
+  } catch (err) {
+    set({
+      error: err instanceof Error ? err.message : String(err),
+      isStreaming: false,
+      activeRequestId: null
+    })
+  } finally {
+    unsubscribe?.()
+  }
+}
