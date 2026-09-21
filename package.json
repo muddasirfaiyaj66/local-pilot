@@ -64,7 +64,7 @@
     "vitest": "^3.0.8"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "allowScripts": {
     "electron@35.7.5": true,

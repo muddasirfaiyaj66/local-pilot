@@ -1,0 +1,2 @@
+{"timestamp":1789975644891,"requestId":"c1","toolName":"code_repo_index","risk":"safe","preview":"Index repository","ok":true}
+{"timestamp":1789975644898,"requestId":"5b9e37de-e135-41cc-9b96-b2f5ba4f5dfb","toolName":"fs_write","risk":"risky","preview":"Write file: tmp-agent-test.txt\n---\nhi","ok":false,"detail":"denied"}

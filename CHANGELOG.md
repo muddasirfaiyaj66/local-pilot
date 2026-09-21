@@ -10,6 +10,10 @@ All notable changes to LocalPilot will be documented here.
 - `electron-updater` auto-update from GitHub Releases + Settings “Check for updates”
 - Release docs (`docs/RELEASE.md`); packaging config polish (icons, asarUnpack for natives)
 
+### Fixed
+
+- CI `npm test` on Node 20 — require Node 22+ for `node:sqlite`; Vitest mocks for Electron / nut-js
+
 ## [0.5.0] — 2026-09-21
 
 ### Added

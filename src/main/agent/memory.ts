@@ -1,7 +1,9 @@
 import { join } from 'node:path'
 import { existsSync, mkdirSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { app } from 'electron'
-import { DatabaseSync } from 'node:sqlite'
+
+type DatabaseSync = import('node:sqlite').DatabaseSync
 
 export interface MemoryNote {
   id: number
@@ -24,8 +26,21 @@ function dbPath(): string {
   }
 }
 
+function loadDatabaseSync(): typeof import('node:sqlite').DatabaseSync {
+  try {
+    const require = createRequire(import.meta.url)
+    const mod = require('node:sqlite') as typeof import('node:sqlite')
+    return mod.DatabaseSync
+  } catch (err) {
+    throw new Error(
+      `SQLite memory requires Node.js 22+ (node:sqlite). ${err instanceof Error ? err.message : String(err)}`
+    )
+  }
+}
+
 export function getMemoryDb(): DatabaseSync {
   if (db) return db
+  const DatabaseSync = loadDatabaseSync()
   db = new DatabaseSync(dbPath())
   db.exec(`
     CREATE TABLE IF NOT EXISTS notes (
@@ -63,7 +78,7 @@ export function searchNotes(query: string, limit = 20): MemoryNote[] {
        WHERE content LIKE ? OR kind LIKE ?
        ORDER BY created_at DESC LIMIT ?`
     )
-    .all(`%${query}%`, `%${query}%`, limit) as Array<{
+    .all(`%${query}%`, `%${query}%`, limit) as unknown as Array<{
     id: number
     kind: string
     content: string

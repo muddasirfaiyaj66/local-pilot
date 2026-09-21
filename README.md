@@ -41,7 +41,7 @@
 
 ## Requirements
 
-- **Node.js 20+**
+- **Node.js 22+** (uses `node:sqlite` for memory)
 - Optional: [Ollama](https://ollama.com) for local models
 - Optional: API key for cloud / OpenRouter / etc.
 
