@@ -373,4 +373,4 @@ export const screenTools: RegisteredTool[] = [
   }
 ]
 
-import { parseGroundingCoordinates } from './grounding'
+export { parseGroundingCoordinates } from './grounding'

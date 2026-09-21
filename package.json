@@ -1,6 +1,6 @@
 {
   "name": "localpilot",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "LocalPilot — cross-platform desktop AI agent that controls your computer",
   "main": "./out/main/index.js",
   "author": "muddasirfaiyaj66",
@@ -36,10 +36,13 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/ibm-plex-sans": "^5.3.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@nut-tree-fork/nut-js": "^4.2.6",
     "@phosphor-icons/react": "^2.1.10",
     "electron-updater": "^6.6.2",
+    "ffmpeg-static": "^5.3.0",
     "playwright": "^1.63.0",
+    "sharp": "^0.35.4",
     "trash": "^9.0.0",
     "zod": "^3.24.2",
     "zustand": "^5.0.3"
@@ -65,6 +68,9 @@
   },
   "allowScripts": {
     "electron@35.7.5": true,
-    "esbuild@0.25.12": true
+    "esbuild@0.25.12": true,
+    "better-sqlite3@13.0.3": true,
+    "sharp@0.35.4": true,
+    "ffmpeg-static@5.3.0": true
   }
 }

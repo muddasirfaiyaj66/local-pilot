@@ -1,7 +1,35 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" role="img" aria-label="LocalPilot">
-  <rect width="32" height="32" rx="7" fill="#0B0B0B"/>
-  <g fill="#3B82F6" fill-rule="evenodd">
-    <path d="M8 6h5.2v12.2H20c4.5 0 7.6-3 7.6-6.8S24.5 6 20 6h-6.8V6H8v18.5h16V21H13.2v-2.8H8V6z"/>
-    <path d="M13.2 9.5H19c2.3 0 3.9 1.45 3.9 3.25S21.3 16 19 16h-5.8V9.5z"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="#ffffff"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="190" fill="#121315"/>
+
+  <!-- Blue monogram -->
+  <g fill="#2F8DF5">
+    <!-- Left L-shaped stroke -->
+    <path d="
+      M 330 268
+      H 407
+      V 633
+      C 407 646, 415 654, 429 654
+      H 537
+      V 730
+      H 330
+      Z"/>
+
+    <!-- Right P-shaped stroke -->
+    <path d="
+      M 450 345
+      H 608
+      C 668 345, 715 392, 715 451
+      V 505
+      C 715 564, 668 611, 608 611
+      H 451
+      L 508 535
+      H 606
+      C 625 535, 639 522, 639 503
+      V 454
+      C 639 435, 625 422, 606 422
+      H 450
+      Z"/>
   </g>
 </svg>

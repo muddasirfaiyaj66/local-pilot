@@ -16,3 +16,4 @@ coverage
 *.tsbuildinfo
 .localpilot-audit.jsonl
 .localpilot-browser-profile
+.localpilot-memory/

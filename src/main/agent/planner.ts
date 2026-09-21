@@ -9,7 +9,14 @@ export function buildPlan(goal: string): AgentPlan {
 
   steps.push({ id: randomUUID(), title: 'Understand goal & workspace', status: 'pending' })
 
-  if (/\b(test|tests|vitest|jest|pytest)\b/.test(lower)) {
+  if (/\b(image|video|audio|ffmpeg|resize|crop|media)\b/.test(lower)) {
+    steps.push({ id: randomUUID(), title: 'Locate media files', status: 'pending' })
+    steps.push({ id: randomUUID(), title: 'Transform with media tools', status: 'pending' })
+    steps.push({ id: randomUUID(), title: 'Verify output', status: 'pending' })
+  } else if (/\b(remember|memory|note|recall)\b/.test(lower)) {
+    steps.push({ id: randomUUID(), title: 'Search or update memory', status: 'pending' })
+    steps.push({ id: randomUUID(), title: 'Confirm stored facts', status: 'pending' })
+  } else if (/\b(test|tests|vitest|jest|pytest)\b/.test(lower)) {
     steps.push({ id: randomUUID(), title: 'Inspect failing tests / code', status: 'pending' })
     steps.push({ id: randomUUID(), title: 'Apply fix', status: 'pending' })
     steps.push({ id: randomUUID(), title: 'Run tests', status: 'pending' })

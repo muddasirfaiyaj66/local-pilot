@@ -16,9 +16,9 @@
 
 ## Status
 
-**Phase 4** — Screen control (`@nut-tree-fork/nut-js`), desktop screenshots, vision coordinate grounding, live preview pane.
+**Phase 5** — Media (ffmpeg/sharp), MCP stdio client, SQLite memory notes + task history.
 
-Phases 5–6: media/MCP/SQLite, packaging. See [Roadmap](#roadmap).
+Phase 6: packaging, CI matrix, auto-update. See [Roadmap](#roadmap).
 
 ## Screenshots / brand
 
@@ -30,11 +30,14 @@ Phases 5–6: media/MCP/SQLite, packaging. See [Roadmap](#roadmap).
 
 **Logo:** Geometric **LP** monogram (LocalPilot) — flat blue `#3B82F6` on charcoal. No clipart pin/plane. Assets: `build/icon.png`, `src/renderer/src/assets/logo-mark.svg`.
 
-## Features (Phase 3)
+## Features (Phase 5)
 
-- Agent mode + Chat mode; workspace-sandboxed fs/shell/code tools
+- Agent + Chat; workspace-sandboxed fs/shell/code tools
 - **Playwright** browser with persistent profile (or CDP via `LOCALPILOT_CDP_URL`)
-- `browser_publish_text` requires approval showing the **exact** post text
+- Screen control + live preview; vision coordinate grounding
+- **Media:** ffmpeg + sharp tools under the workspace
+- **MCP:** configure servers in `mcp.json` (userData); `mcp_reload` refreshes tools
+- **Memory:** SQLite notes (`memory_*`) and task history
 - Permission modes + kill switch `Ctrl/Cmd+Shift+Esc`
 - Plan + action timeline
 
@@ -105,24 +108,41 @@ design-system/        UI tokens (UI UX Pro Max)
 | 2 | Agent loop, fs/shell/code, permissions, kill switch | ✅ |
 | 3 | Playwright browser (persistent profile), post approval | ✅ |
 | 4 | Screen control, vision grounding, live preview | ✅ |
-| 5 | Media (ffmpeg/sharp), MCP client, SQLite memory | Next |
-| 6 | Packaging, CI matrix, auto-update, docs polish | Planned |
+| 5 | Media (ffmpeg/sharp), MCP client, SQLite memory | ✅ |
+| 6 | Packaging, CI matrix, auto-update, docs polish | Next |
 
 ## Safety
 
-- Permission modes: Ask always · Ask risky (default) · Autonomous — **UI in Phase 1, enforcement in Phase 2**
-- Risky actions (posts, deletes, shell outside workspace, credentials) will require preview + Approve/Deny
-- Global kill switch planned: `Ctrl/Cmd+Shift+Esc`
+- Permission modes: Ask always · Ask risky (default) · Autonomous
+- Risky actions (posts, deletes, shell outside workspace, MCP, media writes) require preview + Approve/Deny
+- Global kill switch: `Ctrl/Cmd+Shift+Esc`
 - Untrusted content defense: page/file/screenshot text is data, not instructions
 - Never send API keys/passwords to models; secrets redacted in logs
 
-## Known limitations (Phase 1)
+## MCP config
 
-- No tool execution yet (cannot drive browser/desktop/files)
+Copy [`mcp.example.json`](mcp.example.json) to the app userData folder as `mcp.json`:
+
+```json
+{
+  "servers": [
+    {
+      "name": "filesystem",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed"]
+    }
+  ]
+}
+```
+
+Then restart LocalPilot or ask the agent to run `mcp_reload`.
+
+## Known limitations
+
 - Anthropic / Gemini kinds use OpenAI-compatible gateways only
 - Chat history is in-memory for the session
-- Live view / action timeline are placeholders
-- Installer CI not fully validated until Phase 6
+- Installer CI matrix lands in Phase 6
+- Prefer DOM/browser tools over pixel clicking when possible
 
 ## Contributing
 

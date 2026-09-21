@@ -12,6 +12,7 @@ import { appendAudit } from '../safety/audit'
 import { classifyToolRisk, shouldAutoAllow } from '../safety/permissions'
 import { getTool, listToolDefinitions } from '../tools/registry'
 import type { ToolContext } from '../tools/types'
+import { recordTask } from './memory'
 import { buildPlan } from './planner'
 
 export interface AgentLoopOptions {
@@ -105,6 +106,11 @@ When the goal is complete, respond with a short final summary and do not call mo
       if (assistantText) {
         messages.push({ role: 'assistant', content: assistantText })
       }
+      try {
+        recordTask(opts.goal, summary, 'success')
+      } catch {
+        // memory is best-effort
+      }
       opts.onEvent({ type: 'status', status: 'success' })
       opts.onEvent({ type: 'done', summary })
       return { status: 'success', summary, plan }
@@ -132,6 +138,11 @@ When the goal is complete, respond with a short final summary and do not call mo
   const summary = lastError
     ? `Stopped at step limit (${maxSteps}). Last error: ${lastError}`
     : `Stopped at step limit (${maxSteps}).`
+  try {
+    recordTask(opts.goal, summary, 'failed')
+  } catch {
+    // memory is best-effort
+  }
   opts.onEvent({ type: 'status', status: 'failed' })
   opts.onEvent({ type: 'done', summary })
   return { status: 'failed', summary, plan }

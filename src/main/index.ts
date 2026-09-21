@@ -65,6 +65,18 @@ app.whenReady().then(() => {
       mainWindow.focus()
     }
   })
+
+  void import('./tools/mcp').then(async ({ loadMcpTools }) => {
+    const { refreshDynamicTools } = await import('./tools/registry')
+    try {
+      const tools = await loadMcpTools()
+      refreshDynamicTools(tools)
+      if (tools.length > 0) console.log(`[LocalPilot] MCP: ${tools.length} tool(s)`)
+    } catch (err) {
+      console.warn('[LocalPilot] MCP load skipped', err)
+    }
+  })
+
   createWindow()
 
   app.on('activate', () => {
@@ -84,4 +96,5 @@ app.on('before-quit', () => {
   abortAllStreams()
   unregisterKillSwitch()
   void import('./tools/browserSession').then(({ browserSession }) => browserSession.close())
+  void import('./tools/mcp').then(({ closeMcpConnections }) => closeMcpConnections())
 })

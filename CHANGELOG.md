@@ -2,6 +2,14 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.5.0] — 2026-09-21
+
+### Added
+
+- Media tools: ffmpeg trim/convert/subtitles/concat/extract_audio + sharp resize/crop/convert
+- MCP client (stdio servers from `userData/mcp.json`; see `mcp.example.json`) + `mcp_reload`
+- SQLite memory via Node `node:sqlite` — `memory_add` / `memory_search` / `memory_list` + task history on agent completion
+
 ## [0.4.0] — 2026-09-21
 
 ### Added
