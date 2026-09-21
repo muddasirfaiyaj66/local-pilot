@@ -247,7 +247,7 @@ export function registerIpcHandlers(store: SettingsStore): void {
           goal: request.goal,
           workspacePath: (latest.workspacePath || settings.workspacePath || '').trim(),
           permissionMode: latest.permissionMode,
-          maxSteps: request.maxSteps,
+          maxSteps: request.maxSteps ?? latest.maxAgentSteps,
           mode: request.mode,
           signal: controller.signal,
           onEvent: (agentEvent) => emit({ requestId, event: agentEvent }),

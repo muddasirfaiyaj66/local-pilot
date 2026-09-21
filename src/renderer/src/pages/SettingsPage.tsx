@@ -20,6 +20,7 @@ export function SettingsPage(): React.JSX.Element {
   const openWorkspace = useAppStore((s) => s.openWorkspace)
   const setWorkspacePath = useAppStore((s) => s.setWorkspacePath)
   const clearWorkspace = useAppStore((s) => s.clearWorkspace)
+  const setMaxAgentSteps = useAppStore((s) => s.setMaxAgentSteps)
 
   const [appVersion, setAppVersion] = useState('')
   const [updateMsg, setUpdateMsg] = useState<string | null>(null)
@@ -186,6 +187,28 @@ export function SettingsPage(): React.JSX.Element {
             className="lp-input mt-2 font-[var(--font-mono)] text-[12px]"
             spellCheck={false}
           />
+        </section>
+
+        <section className="mt-8 max-w-lg">
+          <h2 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-faint)]">
+            Agent
+          </h2>
+          <p className="mb-3 text-[12px] text-[var(--color-text-muted)]">
+            Tool steps one Agent run may take before it stops and summarises.
+          </p>
+          <Field label="Step budget">
+            <input
+              type="number"
+              min={5}
+              max={200}
+              className="lp-input"
+              value={settings?.maxAgentSteps ?? 60}
+              onChange={(e) => {
+                const next = Number(e.target.value)
+                if (Number.isFinite(next)) void setMaxAgentSteps(next)
+              }}
+            />
+          </Field>
         </section>
 
         <section className="mt-8 max-w-lg space-y-3">

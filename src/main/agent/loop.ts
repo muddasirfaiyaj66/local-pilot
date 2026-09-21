@@ -37,6 +37,16 @@ export interface AgentLoopResult {
 }
 
 const MAX_TOOL_RETRIES = 3
+/** Inspect-style tools models like to re-run instead of acting on what they read. */
+const READ_ONLY_REPEATABLE = new Set([
+  'fs_list',
+  'fs_read',
+  'code_repo_index',
+  'browser_get_dom_snapshot',
+  'browser_screenshot',
+  'screen_capture',
+  'proc_logs'
+])
 /** Plan mode: at most this many inspect tools before forcing a written plan. */
 const PLAN_MAX_INSPECT_STEPS = 2
 /** Abort a model turn if the full stream exceeds this (prevents infinite "Thinking…"). */
@@ -80,7 +90,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
     mode === 'plan' ? allTools.filter((t) => readOnlyNames.has(t.name)) : allTools
 
   const createGoal = isCreateBuildGoal(opts.goal)
-  const maxSteps = opts.maxSteps ?? (mode === 'agent' && createGoal ? 32 : 20)
+  const maxSteps = opts.maxSteps ?? (mode === 'plan' ? 4 : 60)
   const modeHint =
     mode === 'plan'
       ? [
@@ -245,6 +255,22 @@ ${modeHint}`
     const attempts = (fuzzyAttempts.get(fuzzy) ?? 0) + 1
     fuzzyAttempts.set(fuzzy, attempts)
 
+    if (result.ok && attempts === 3 && READ_ONLY_REPEATABLE.has(call.name)) {
+      messages.push({
+        role: 'user',
+        content: `You have already run ${call.name} ${attempts} times. You have this information — act on it or finish. Do not inspect again.`
+      })
+    }
+
+    const stepsLeft = maxSteps - steps
+    if (stepsLeft === 5) {
+      messages.push({
+        role: 'user',
+        content:
+          'Only 5 tool steps remain. Finish the most important work now and then reply with a summary instead of more inspection.'
+      })
+    }
+
     if (!result.ok && attempts >= 2) {
       const banned = attempts >= 3
       if (banned) bannedApproaches.add(fuzzy)
@@ -320,9 +346,14 @@ ${modeHint}`
     return finishSuccess(opts, plan, summary)
   }
 
-  const summary = lastError
-    ? `Stopped at step limit (${maxSteps}). Last error: ${lastError}`
-    : `Stopped at step limit (${maxSteps}).`
+  // Out of steps: spend one tool-less turn on a wrap-up so the user gets real output.
+  const wrapUp = await summariseAtLimit(opts, messages, maxSteps)
+  const summary =
+    wrapUp ??
+    (lastError
+      ? `Reached the step limit (${maxSteps}). Last error: ${lastError}`
+      : `Reached the step limit (${maxSteps}). Send "continue" to keep going.`)
+  emitUsage(opts, promptChars, completionChars)
   try {
     recordTask(opts.goal, summary, 'failed')
   } catch {
@@ -331,6 +362,43 @@ ${modeHint}`
   opts.onEvent({ type: 'status', status: 'failed' })
   opts.onEvent({ type: 'done', summary })
   return { status: 'failed', summary, plan }
+}
+
+/** Ask the model, with no tools available, what it finished and what remains. */
+async function summariseAtLimit(
+  opts: AgentLoopOptions,
+  messages: ProviderChatMessage[],
+  maxSteps: number
+): Promise<string | null> {
+  if (opts.signal?.aborted) return null
+  try {
+    let text = ''
+    const turn = opts.provider.chat({
+      messages: [
+        ...messages,
+        {
+          role: 'user',
+          content:
+            `You have used all ${maxSteps} tool steps. Do not call tools. ` +
+            'Reply with a short summary: what is done, what is left, and the exact next step to run.'
+        }
+      ],
+      stream: true,
+      signal: opts.signal
+    })
+    for await (const chunk of chatWithWatchdog(turn, opts.signal, 30_000, 45_000)) {
+      if (chunk.type === 'text') {
+        text += chunk.text
+        opts.onEvent({ type: 'thought', text: chunk.text })
+      }
+    }
+    const trimmed = text.trim()
+    return trimmed
+      ? `${trimmed}\n\n—\nReached the step limit (${maxSteps}). Send "continue" to resume.`
+      : null
+  } catch {
+    return null
+  }
 }
 
 function finishSuccess(

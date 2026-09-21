@@ -2,6 +2,18 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.11.0] — 2026-09-21
+
+### Added
+
+- **Agent step budget** in Settings (default 60, was a hard-coded 20)
+
+### Changed
+
+- Hitting the step limit now spends one tool-free turn summarising what is done, what remains, and the next step — instead of only “Stopped at step limit”
+- The agent is warned when 5 steps remain so it wraps up useful work
+- Re-running the same inspect tool (screenshots, DOM snapshots, file reads) a third time prompts the agent to act on what it already has
+
 ## [0.10.1] — 2026-09-21
 
 ### Fixed

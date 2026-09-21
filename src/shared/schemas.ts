@@ -87,6 +87,8 @@ export const AppSettingsSchema = z.object({
   workspacePath: z.string().default(''),
   permissionMode: PermissionModeSchema.default('ask-risky'),
   activeProviderId: z.string().nullable().default(null),
+  /** Tool calls an Agent run may make before it stops and summarises. */
+  maxAgentSteps: z.number().int().min(5).max(200).default(60),
   providers: z.array(ProviderConfigSchema).default([])
 })
 export type AppSettings = z.infer<typeof AppSettingsSchema>

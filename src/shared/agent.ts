@@ -68,7 +68,8 @@ export const AgentStartRequestSchema = z.object({
       content: z.string()
     })
   ).optional(),
-  maxSteps: z.number().int().positive().max(50).default(20)
+  /** Omit to use the configured Agent step budget. */
+  maxSteps: z.number().int().positive().max(200).optional()
 })
 export type AgentStartRequest = z.infer<typeof AgentStartRequestSchema>
 

@@ -106,6 +106,7 @@ interface AppState {
   setView: (view: 'chat' | 'settings') => void
   setInteractionMode: (mode: InteractionMode) => void
   setPermissionMode: (mode: PermissionMode) => Promise<void>
+  setMaxAgentSteps: (steps: number) => Promise<void>
   setActiveProvider: (id: string) => Promise<void>
   openWorkspace: () => Promise<void>
   setWorkspacePath: (path: string) => Promise<void>
@@ -500,6 +501,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ settings })
   },
 
+  setMaxAgentSteps: async (steps) => {
+    const clamped = Math.min(200, Math.max(5, Math.round(steps)))
+    const settings = await window.localpilot.setSettings({ maxAgentSteps: clamped })
+    set({ settings })
+  },
+
   setActiveProvider: async (id) => {
     const settings = await window.localpilot.setSettings({ activeProviderId: id })
     set({ settings })
@@ -837,7 +844,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           providerId,
           goal: content || trimmed,
           mode: interactionMode === 'plan' ? 'plan' : 'agent',
-          maxSteps: interactionMode === 'plan' ? 4 : 20
+          // Agent runs use the configured budget from settings.
+          ...(interactionMode === 'plan' ? { maxSteps: 4 } : {})
         })
         set((s) => ({
           activeRequestId: requestId,

@@ -64,6 +64,25 @@ describe('fuzzySignature', () => {
 })
 
 describe('runAgentLoop', () => {
+  it('summarises instead of just reporting the step limit', async () => {
+    const provider = new ScriptedProvider([listCall('c1'), listCall('c2')])
+
+    const result = await runAgentLoop({
+      provider,
+      goal: 'Inspect the workspace',
+      workspacePath: process.cwd(),
+      permissionMode: 'autonomous',
+      maxSteps: 2,
+      onEvent: () => undefined,
+      requestPermission: async () => true,
+      askUser: async () => 'yes'
+    })
+
+    expect(result.status).toBe('failed')
+    expect(result.summary).toContain('Done.')
+    expect(result.summary).toContain('step limit (2)')
+  })
+
   it('blocks a failing command after repeated near-identical retries', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'lp-ban-'))
     try {
