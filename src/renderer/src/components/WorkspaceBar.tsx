@@ -6,7 +6,7 @@ function basename(path: string): string {
   return parts[parts.length - 1] ?? path
 }
 
-/** Cursor-style workspace chip in the title bar */
+/** Workspace chip in the title bar */
 export function WorkspaceChip(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const openWorkspace = useAppStore((s) => s.openWorkspace)
@@ -66,7 +66,7 @@ export function WorkspaceBanner(): React.JSX.Element | null {
     <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--color-warn)]/30 bg-[color-mix(in_oklab,var(--color-warn)_8%,transparent)] px-4 py-2">
       <div className="min-w-0 text-[12px] text-[var(--color-text-muted)]">
         <span className="font-medium text-[var(--color-text)]">No folder open.</span>{' '}
-        Open a project folder so Agent / Plan can edit files (like Cursor).
+        Open a project folder so Agent / Plan can edit files.
       </div>
       <button
         type="button"

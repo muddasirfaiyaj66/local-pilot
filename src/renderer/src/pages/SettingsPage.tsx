@@ -142,7 +142,7 @@ export function SettingsPage(): React.JSX.Element {
             Workspace
           </h2>
           <p className="mb-3 text-[12px] text-[var(--color-text-muted)]">
-            Like Cursor — pick a project folder. Agent / Plan tools are sandboxed here.
+            Pick a project folder. Agent / Plan tools are sandboxed here.
           </p>
           <div className="flex gap-2">
             <button

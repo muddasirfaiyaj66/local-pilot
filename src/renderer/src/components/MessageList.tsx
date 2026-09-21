@@ -36,8 +36,7 @@ export function MessageList(): React.JSX.Element {
               LocalPilot
             </h2>
             <p className="mt-2 max-w-sm text-[13px] text-[var(--color-text-muted)]">
-              Cursor-style desktop agent. Open a folder, then Chat / Plan / Agent — attach files,
-              review diffs, watch context.
+              Open a folder, then Chat / Plan / Agent — attach files, review diffs, watch context.
             </p>
             <button
               type="button"
