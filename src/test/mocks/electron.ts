@@ -1,8 +1,11 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 /** Minimal Electron stub for Vitest (main-process APIs used by tools). */
 export const app = {
   getPath: (name: string): string => {
-    if (name === 'userData') return process.cwd() + '/.localpilot-userdata'
-    return process.cwd()
+    if (name === 'userData') return join(tmpdir(), 'localpilot-vitest-userdata')
+    return tmpdir()
   },
   getVersion: (): string => '0.0.0-test',
   isPackaged: false
