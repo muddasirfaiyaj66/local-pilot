@@ -2,6 +2,15 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.3.0] — 2026-09-21
+
+### Added
+
+- Playwright browser tools with persistent profile (logins survive restarts)
+- Optional CDP attach via `LOCALPILOT_CDP_URL`
+- Tools: open_url, click, type, press, scroll, screenshot, DOM snapshot, wait_for, tabs, upload_file
+- `browser_publish_text` (critical) shows exact post text in Approve/Deny modal before publishing
+
 ## [0.2.0] — 2026-09-21
 
 ### Added

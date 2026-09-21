@@ -83,4 +83,5 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   abortAllStreams()
   unregisterKillSwitch()
+  void import('./tools/browserSession').then(({ browserSession }) => browserSession.close())
 })

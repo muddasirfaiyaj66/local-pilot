@@ -16,9 +16,9 @@
 
 ## Status
 
-**Phase 2** — Agent loop with fs/shell/code tools, permission prompts, kill switch (`Ctrl/Cmd+Shift+Esc`), action timeline.
+**Phase 3** — Playwright browser control with persistent profile + critical `browser_publish_text` approval preview.
 
-Phases 3–6: browser, screen/vision, media/MCP/SQLite, packaging. See [Roadmap](#roadmap).
+Phases 4–6: screen/vision, media/MCP/SQLite, packaging. See [Roadmap](#roadmap).
 
 ## Screenshots / brand
 
@@ -30,14 +30,13 @@ Phases 3–6: browser, screen/vision, media/MCP/SQLite, packaging. See [Roadmap]
 
 **Logo:** Geometric **LP** monogram (LocalPilot) — flat blue `#3B82F6` on charcoal. No clipart pin/plane. Assets: `build/icon.png`, `src/renderer/src/assets/logo-mark.svg`.
 
-## Features (Phase 2)
+## Features (Phase 3)
 
-- Agent mode (default) + Chat mode toggle in composer
-- Workspace-sandboxed **fs** / **shell** / **code** tools with Zod schemas
-- Permission gates: Ask always · Ask risky · Autonomous
-- Kill switch: `Ctrl/Cmd+Shift+Esc`
-- Plan + action timeline in the right rail
-- Phase 1 chat providers (Ollama + OpenAI-compatible) still available
+- Agent mode + Chat mode; workspace-sandboxed fs/shell/code tools
+- **Playwright** browser with persistent profile (or CDP via `LOCALPILOT_CDP_URL`)
+- `browser_publish_text` requires approval showing the **exact** post text
+- Permission modes + kill switch `Ctrl/Cmd+Shift+Esc`
+- Plan + action timeline
 
 ## Requirements
 
@@ -104,8 +103,8 @@ design-system/        UI tokens (UI UX Pro Max)
 |-------|--------|--------|
 | 1 | Scaffold, chat UI, providers, streaming | ✅ |
 | 2 | Agent loop, fs/shell/code, permissions, kill switch | ✅ |
-| 3 | Playwright browser (persistent profile), post approval | Next |
-| 4 | Screen control, vision grounding, live preview | Planned |
+| 3 | Playwright browser (persistent profile), post approval | ✅ |
+| 4 | Screen control, vision grounding, live preview | Next |
 | 5 | ffmpeg/sharp, MCP client, SQLite memory | Planned |
 | 6 | Packaging, CI matrix, auto-update, docs polish | Planned |
 

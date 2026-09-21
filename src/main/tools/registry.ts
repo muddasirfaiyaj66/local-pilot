@@ -1,11 +1,18 @@
 import type { ToolDefinition } from '@shared/types'
 import { askUserTool } from './askUser'
+import { browserTools } from './browser'
 import { codeTools } from './code'
 import { fsTools } from './fs'
 import { shellTools } from './shell'
 import { toToolDefinition, type RegisteredTool } from './types'
 
-const ALL: RegisteredTool[] = [...fsTools, ...shellTools, ...codeTools, askUserTool]
+const ALL: RegisteredTool[] = [
+  ...fsTools,
+  ...shellTools,
+  ...codeTools,
+  ...browserTools,
+  askUserTool
+]
 
 export function getToolRegistry(): RegisteredTool[] {
   return ALL
