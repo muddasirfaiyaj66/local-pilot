@@ -16,9 +16,9 @@
 
 ## Status
 
-**Phase 3** — Playwright browser control with persistent profile + critical `browser_publish_text` approval preview.
+**Phase 4** — Screen control (`@nut-tree-fork/nut-js`), desktop screenshots, vision coordinate grounding, live preview pane.
 
-Phases 4–6: screen/vision, media/MCP/SQLite, packaging. See [Roadmap](#roadmap).
+Phases 5–6: media/MCP/SQLite, packaging. See [Roadmap](#roadmap).
 
 ## Screenshots / brand
 
@@ -104,8 +104,8 @@ design-system/        UI tokens (UI UX Pro Max)
 | 1 | Scaffold, chat UI, providers, streaming | ✅ |
 | 2 | Agent loop, fs/shell/code, permissions, kill switch | ✅ |
 | 3 | Playwright browser (persistent profile), post approval | ✅ |
-| 4 | Screen control, vision grounding, live preview | Next |
-| 5 | ffmpeg/sharp, MCP client, SQLite memory | Planned |
+| 4 | Screen control, vision grounding, live preview | ✅ |
+| 5 | Media (ffmpeg/sharp), MCP client, SQLite memory | Next |
 | 6 | Packaging, CI matrix, auto-update, docs polish | Planned |
 
 ## Safety

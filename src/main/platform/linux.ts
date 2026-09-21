@@ -1,2 +1,4 @@
-/** Linux-specific platform helpers — Phase 4+ */
-export {}
+/** Linux helpers (X11/Wayland notes) */
+export function getPlatformName(): 'linux' {
+  return 'linux'
+}

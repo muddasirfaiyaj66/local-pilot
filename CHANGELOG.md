@@ -2,6 +2,15 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.4.0] — 2026-09-21
+
+### Added
+
+- Screen tools via `@nut-tree-fork/nut-js` (click, drag, type, hotkey, scroll)
+- `desktopCapturer` screenshots with DPI-aware coordinate scaling for vision models
+- Live screen preview pane (refresh + auto while agent runs)
+- Grounding coordinate parser for UI-TARS / VL-style outputs
+
 ## [0.3.0] — 2026-09-21
 
 ### Added

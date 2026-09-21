@@ -61,7 +61,15 @@ const api: LocalPilotApi = {
     return () => {
       ipcRenderer.removeListener(IpcChannels.agentKill, listener)
     }
-  }
+  },
+  getScreenPreview: () =>
+    ipcRenderer.invoke(IpcChannels.screenPreview) as Promise<{
+      ok: boolean
+      dataUrl?: string
+      width?: number
+      height?: number
+      error?: string
+    }>
 }
 
 contextBridge.exposeInMainWorld('localpilot', api)

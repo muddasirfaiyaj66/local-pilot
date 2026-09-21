@@ -3,6 +3,7 @@ import { askUserTool } from './askUser'
 import { browserTools } from './browser'
 import { codeTools } from './code'
 import { fsTools } from './fs'
+import { screenTools } from './screen'
 import { shellTools } from './shell'
 import { toToolDefinition, type RegisteredTool } from './types'
 
@@ -11,6 +12,7 @@ const ALL: RegisteredTool[] = [
   ...shellTools,
   ...codeTools,
   ...browserTools,
+  ...screenTools,
   askUserTool
 ]
 

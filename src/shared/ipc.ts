@@ -29,6 +29,7 @@ export const IpcChannels = {
   agentPermissionRespond: 'agent:permission-respond',
   agentAskRespond: 'agent:ask-respond',
   agentKill: 'agent:kill',
+  screenPreview: 'screen:preview',
   appGetVersion: 'app:get-version',
   appGetPlatform: 'app:get-platform'
 } as const
@@ -88,6 +89,13 @@ export interface LocalPilotApi {
   respondAsk: (response: AskResponse) => Promise<void>
   onAgentEvent: (handler: (payload: AgentEventPayload) => void) => () => void
   onAgentKill: (handler: () => void) => () => void
+  getScreenPreview: () => Promise<{
+    ok: boolean
+    dataUrl?: string
+    width?: number
+    height?: number
+    error?: string
+  }>
 }
 
 export type { AgentStartRequest, PermissionRequest }

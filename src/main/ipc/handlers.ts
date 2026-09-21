@@ -127,6 +127,24 @@ export function registerIpcHandlers(store: SettingsStore): void {
     activeAgents.delete(requestId)
   })
 
+  ipcMain.handle(IpcChannels.screenPreview, async () => {
+    try {
+      const { captureScreenPng } = await import('../tools/screen')
+      const shot = await captureScreenPng()
+      return {
+        ok: true,
+        dataUrl: `data:image/png;base64,${shot.base64}`,
+        width: shot.width,
+        height: shot.height
+      }
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+
   ipcMain.handle(IpcChannels.agentStart, async (event, raw: unknown) => {
     const request = AgentStartRequestSchema.parse(raw)
     const providerConfig = store.getProvider(request.providerId)
