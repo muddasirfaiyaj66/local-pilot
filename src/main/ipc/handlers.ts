@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -45,22 +45,43 @@ export function registerIpcHandlers(store: SettingsStore): void {
       }
     }
   )
+  ipcMain.removeHandler(IpcChannels.dialogOpenFolder)
   ipcMain.handle(IpcChannels.dialogOpenFolder, async (event): Promise<string | null> => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    const opts = {
-      title: 'Open Folder',
-      buttonLabel: 'Select as Workspace',
-      properties: ['openDirectory', 'createDirectory'] as Array<
-        'openDirectory' | 'createDirectory'
-      >
+    try {
+      const win =
+        BrowserWindow.fromWebContents(event.sender) ??
+        BrowserWindow.getFocusedWindow() ??
+        BrowserWindow.getAllWindows().find((w) => !w.isDestroyed()) ??
+        null
+
+      const current = store.getSettings().workspacePath
+      const properties: Array<'openDirectory' | 'createDirectory'> = ['openDirectory']
+      // createDirectory is macOS-only; including it on Windows can break the picker.
+      if (process.platform === 'darwin') properties.push('createDirectory')
+
+      const opts: OpenDialogOptions = {
+        title: 'Open Folder',
+        buttonLabel: 'Select Folder',
+        properties,
+        ...(current ? { defaultPath: current } : {})
+      }
+
+      if (win && !win.isDestroyed()) {
+        if (win.isMinimized()) win.restore()
+        win.focus()
+      }
+
+      const result = win
+        ? await dialog.showOpenDialog(win, opts)
+        : await dialog.showOpenDialog(opts)
+      if (result.canceled || result.filePaths.length === 0) return null
+      const folder = result.filePaths[0]!
+      store.setSettings({ workspacePath: folder })
+      return folder
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      throw new Error(`Open Folder failed: ${message}`)
     }
-    const result = win
-      ? await dialog.showOpenDialog(win, opts)
-      : await dialog.showOpenDialog(opts)
-    if (result.canceled || result.filePaths.length === 0) return null
-    const folder = result.filePaths[0]!
-    store.setSettings({ workspacePath: folder })
-    return folder
   })
   ipcMain.handle(IpcChannels.settingsGet, () => store.getSettings())
   ipcMain.handle(

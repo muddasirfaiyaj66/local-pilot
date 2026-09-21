@@ -105,6 +105,7 @@ interface AppState {
   setPermissionMode: (mode: PermissionMode) => Promise<void>
   setActiveProvider: (id: string) => Promise<void>
   openWorkspace: () => Promise<void>
+  setWorkspacePath: (path: string) => Promise<void>
   clearWorkspace: () => Promise<void>
   refreshProviders: () => Promise<void>
   upsertProvider: (
@@ -492,13 +493,29 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   openWorkspace: async () => {
-    const folder = await window.localpilot.openFolder()
-    if (!folder) return
-    const [settings, providers] = await Promise.all([
-      window.localpilot.getSettings(),
-      window.localpilot.listProviders()
-    ])
-    set({ settings, providers, error: null })
+    try {
+      if (typeof window.localpilot?.openFolder !== 'function') {
+        set({ error: 'Open Folder is unavailable — restart LocalPilot.' })
+        return
+      }
+      const folder = await window.localpilot.openFolder()
+      if (!folder) return
+      // Prefer returned path; re-fetch so chip/banner/settings stay in sync with disk.
+      const settings = await window.localpilot.getSettings()
+      set({
+        settings: { ...settings, workspacePath: folder },
+        error: null
+      })
+    } catch (err) {
+      set({
+        error: `Could not open folder: ${err instanceof Error ? err.message : String(err)}`
+      })
+    }
+  },
+
+  setWorkspacePath: async (path) => {
+    const settings = await window.localpilot.setSettings({ workspacePath: path.trim() })
+    set({ settings, error: null })
   },
 
   clearWorkspace: async () => {
@@ -710,10 +727,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const provider = providers.find((p) => p.id === providerId)
     const limit = contextLimitForModel(provider?.model ?? '')
 
-    if (interactionMode !== 'chat' && !settings?.workspacePath) {
+    if (interactionMode !== 'chat' && !settings?.workspacePath?.trim()) {
       set({
         error: 'Open a project folder before running Agent / Plan (file tools need a workspace).'
       })
+      return
     }
 
     const images: ChatImage[] = attachments

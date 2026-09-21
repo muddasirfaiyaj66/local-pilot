@@ -18,11 +18,17 @@ export function SettingsPage(): React.JSX.Element {
   const testResult = useAppStore((s) => s.testResult)
 
   const openWorkspace = useAppStore((s) => s.openWorkspace)
+  const setWorkspacePath = useAppStore((s) => s.setWorkspacePath)
   const clearWorkspace = useAppStore((s) => s.clearWorkspace)
 
   const [appVersion, setAppVersion] = useState('')
   const [updateMsg, setUpdateMsg] = useState<string | null>(null)
   const [updateBusy, setUpdateBusy] = useState(false)
+  const [workspaceDraft, setWorkspaceDraft] = useState(settings?.workspacePath ?? '')
+
+  useEffect(() => {
+    setWorkspaceDraft(settings?.workspacePath ?? '')
+  }, [settings?.workspacePath])
 
   useEffect(() => {
     void window.localpilot.getVersion().then(setAppVersion)
@@ -163,10 +169,22 @@ export function SettingsPage(): React.JSX.Element {
             ) : null}
           </div>
           <input
-            value={settings?.workspacePath ?? ''}
-            readOnly
-            placeholder="No folder open"
+            value={workspaceDraft}
+            onChange={(e) => setWorkspaceDraft(e.target.value)}
+            onBlur={() => {
+              const next = workspaceDraft.trim()
+              if (next !== (settings?.workspacePath ?? '')) {
+                void setWorkspacePath(next)
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur()
+              }
+            }}
+            placeholder="No folder open — click Open Folder or paste a path"
             className="lp-input mt-2 font-[var(--font-mono)] text-[12px]"
+            spellCheck={false}
           />
         </section>
 

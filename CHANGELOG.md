@@ -2,6 +2,14 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.8.1] — 2026-09-21
+
+### Fixed
+
+- **Open Folder** native picker (Windows-safe dialog options, focus parent window, surface errors, refresh chip/banner/settings)
+- Block Agent / Plan until a workspace folder is set (was still starting and failing with “No workspace configured”)
+- Settings workspace path can be pasted/edited as a fallback
+
 ## [0.8.0] — 2026-09-21
 
 ### Added
