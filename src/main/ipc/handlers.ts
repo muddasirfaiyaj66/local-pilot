@@ -225,11 +225,13 @@ export function registerIpcHandlers(store: SettingsStore): void {
     void (async () => {
       const provider = createProvider(providerConfig, store.getApiKey(request.providerId))
       try {
+        // Re-read settings so Open Folder / workspace edits apply even if start was queued.
+        const latest = store.getSettings()
         await runAgentLoop({
           provider,
           goal: request.goal,
-          workspacePath: settings.workspacePath,
-          permissionMode: settings.permissionMode,
+          workspacePath: (latest.workspacePath || settings.workspacePath || '').trim(),
+          permissionMode: latest.permissionMode,
           maxSteps: request.maxSteps,
           mode: request.mode,
           signal: controller.signal,

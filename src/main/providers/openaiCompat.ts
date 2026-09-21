@@ -186,6 +186,20 @@ function toOpenAIMessage(msg: ProviderChatMessage): Record<string, unknown> {
       tool_call_id: msg.toolCallId ?? 'tool_call'
     }
   }
+  if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
+    return {
+      role: 'assistant',
+      content: msg.content || null,
+      tool_calls: msg.toolCalls.map((tc) => ({
+        id: tc.id,
+        type: 'function',
+        function: {
+          name: tc.name,
+          arguments: JSON.stringify(tc.arguments ?? {})
+        }
+      }))
+    }
+  }
   if (msg.images && msg.images.length > 0 && msg.role === 'user') {
     return {
       role: 'user',

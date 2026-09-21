@@ -1,17 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { ChatStreamChunk } from '@shared/types'
 import type { ModelProvider, ProviderChatParams } from '../providers/base'
 import { runAgentLoop } from './loop'
 
 class ScriptedProvider implements ModelProvider {
   readonly kind = 'mock'
-  private turn = 0
+  turn = 0
+  readonly seenTools: Array<ProviderChatParams['tools']> = []
 
-  constructor(
-    private readonly turns: Array<ChatStreamChunk[]>
-  ) {}
+  constructor(private readonly turns: Array<ChatStreamChunk[]>) {}
 
-  async *chat(_params: ProviderChatParams): AsyncGenerator<ChatStreamChunk, void, unknown> {
+  async *chat(params: ProviderChatParams): AsyncGenerator<ChatStreamChunk, void, unknown> {
+    this.seenTools.push(params.tools)
     const chunks = this.turns[this.turn] ?? [{ type: 'text', text: 'Done.' }, { type: 'done' }]
     this.turn += 1
     for (const c of chunks) yield c
@@ -24,6 +27,16 @@ class ScriptedProvider implements ModelProvider {
   async testConnection(): Promise<{ ok: boolean; message: string }> {
     return { ok: true, message: 'ok' }
   }
+}
+
+function listCall(id: string): ChatStreamChunk[] {
+  return [
+    {
+      type: 'tool_call',
+      toolCall: { id, name: 'fs_list', arguments: { path: '.' } }
+    },
+    { type: 'done', finishReason: 'tool_calls' }
+  ]
 }
 
 describe('runAgentLoop', () => {
@@ -150,5 +163,72 @@ describe('runAgentLoop', () => {
     expect(requestPermission).toHaveBeenCalled()
     // Denied write → model may still "succeed" with text; status can be success or failed
     expect(['success', 'failed']).toContain(result.status)
+  })
+
+  it('plan mode exits after empty fs_list instead of looping to step limit', async () => {
+    const ws = mkdtempSync(join(tmpdir(), 'lp-plan-empty-'))
+    try {
+      const provider = new ScriptedProvider([
+        listCall('p1'),
+        [
+          { type: 'text', text: '1. Scaffold HTML\n2. Add JS todo logic\n3. Style UI' },
+          { type: 'done' }
+        ]
+      ])
+
+      const result = await runAgentLoop({
+        provider,
+        goal: 'create a todo application',
+        workspacePath: ws,
+        permissionMode: 'autonomous',
+        mode: 'plan',
+        maxSteps: 8,
+        onEvent: () => undefined,
+        requestPermission: async () => true,
+        askUser: async () => 'yes'
+      })
+
+      expect(result.status).toBe('success')
+      expect(result.summary.toLowerCase()).toMatch(/scaffold|todo|plan|agent/)
+      // After empty list, next turn should not offer tools
+      expect(provider.seenTools[1]).toBeUndefined()
+      expect(provider.turn).toBeLessThanOrEqual(2)
+    } finally {
+      rmSync(ws, { recursive: true, force: true })
+    }
+  })
+
+  it('plan mode stops duplicate fs_list without hitting the step limit', async () => {
+    const ws = mkdtempSync(join(tmpdir(), 'lp-plan-dup-'))
+    try {
+      const provider = new ScriptedProvider([
+        listCall('d1'),
+        listCall('d2'),
+        listCall('d3'),
+        listCall('d4'),
+        listCall('d5'),
+        listCall('d6'),
+        listCall('d7'),
+        listCall('d8')
+      ])
+
+      const result = await runAgentLoop({
+        provider,
+        goal: 'create a todo application',
+        workspacePath: ws,
+        permissionMode: 'autonomous',
+        mode: 'plan',
+        maxSteps: 8,
+        onEvent: () => undefined,
+        requestPermission: async () => true,
+        askUser: async () => 'yes'
+      })
+
+      expect(result.status).toBe('success')
+      expect(result.summary).not.toMatch(/step limit/i)
+      expect(provider.turn).toBeLessThanOrEqual(3)
+    } finally {
+      rmSync(ws, { recursive: true, force: true })
+    }
   })
 })

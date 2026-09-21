@@ -5,6 +5,10 @@ export interface ProviderChatMessage {
   content: string
   images?: ChatImage[]
   toolCallId?: string
+  /** Present on assistant turns that requested tools (needed for multi-turn tool use). */
+  toolCalls?: ToolCall[]
+  /** Optional tool name for role=tool (some providers expect it). */
+  toolName?: string
 }
 
 export interface ProviderChatParams {

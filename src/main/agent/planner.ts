@@ -20,6 +20,11 @@ export function buildPlan(goal: string): AgentPlan {
     steps.push({ id: randomUUID(), title: 'Inspect failing tests / code', status: 'pending' })
     steps.push({ id: randomUUID(), title: 'Apply fix', status: 'pending' })
     steps.push({ id: randomUUID(), title: 'Run tests', status: 'pending' })
+  } else if (isCreateBuildGoal(lower)) {
+    steps.push({ id: randomUUID(), title: 'Confirm workspace (empty OK for greenfield)', status: 'pending' })
+    steps.push({ id: randomUUID(), title: 'Scaffold project files', status: 'pending' })
+    steps.push({ id: randomUUID(), title: 'Implement core features', status: 'pending' })
+    steps.push({ id: randomUUID(), title: 'Verify app runs / looks right', status: 'pending' })
   } else if (/\b(file|read|write|edit|refactor)\b/.test(lower)) {
     steps.push({ id: randomUUID(), title: 'Locate relevant files', status: 'pending' })
     steps.push({ id: randomUUID(), title: 'Apply file changes', status: 'pending' })
@@ -38,4 +43,18 @@ export function buildPlan(goal: string): AgentPlan {
   }
 
   return { goal: g, steps, editable: true }
+}
+
+/** Goals that create new apps/files from scratch (Plan should not loop on empty dirs). */
+export function isCreateBuildGoal(goal: string): boolean {
+  const lower = goal.toLowerCase()
+  return /\b(create|build|scaffold|make|implement|generate|write|bootstrap|set\s*up)\b/.test(
+    lower
+  )
+}
+
+/** Human-readable plan text for Plan-mode completion. */
+export function formatPlanSummary(plan: AgentPlan): string {
+  const lines = plan.steps.map((s, i) => `${i + 1}. ${s.title}`)
+  return `Plan for: ${plan.goal}\n\n${lines.join('\n')}\n\nSwitch to Agent mode to execute these steps (Plan mode is read-only).`
 }

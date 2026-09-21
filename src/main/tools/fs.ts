@@ -29,7 +29,10 @@ const EditArgs = z.object({
 })
 
 const ListArgs = z.object({
-  path: z.string().default('.'),
+  path: z
+    .string()
+    .default('.')
+    .transform((s) => s.trim() || '.'),
   maxEntries: z.number().int().positive().max(500).optional()
 })
 
@@ -181,9 +184,22 @@ export const fsTools: RegisteredTool[] = [
         .map((name) => {
           const p = join(full, name)
           const st = statSync(p)
-          return `${st.isDirectory() ? 'dir ' : 'file'} ${name}`
+          return `${st.isDirectory() ? 'dir' : 'file'} ${name}`
         })
-      return okResult(entries.join('\n') || '(empty)')
+      const rel = relative(resolveInWorkspace(ctx.workspacePath, '.'), full) || '.'
+      const header = [
+        `Workspace: ${ctx.workspacePath}`,
+        `Path: ${rel}`,
+        `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`
+      ].join('\n')
+      if (entries.length === 0) {
+        return okResult(
+          `${header}\n(empty directory)\n` +
+            'Note: Empty is normal for create/build goals. Do not call fs_list again — ' +
+            'in Plan mode write the plan and stop; in Agent mode create files with fs_write.'
+        )
+      }
+      return okResult(`${header}\n${entries.join('\n')}`)
     })
   },
   {

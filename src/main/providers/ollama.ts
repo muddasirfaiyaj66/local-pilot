@@ -192,6 +192,25 @@ export class OllamaProvider implements ModelProvider {
 }
 
 function toOllamaMessage(msg: ProviderChatMessage): Record<string, unknown> {
+  if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
+    return {
+      role: 'assistant',
+      content: msg.content || '',
+      tool_calls: msg.toolCalls.map((tc) => ({
+        function: {
+          name: tc.name,
+          arguments: tc.arguments
+        }
+      }))
+    }
+  }
+  if (msg.role === 'tool') {
+    return {
+      role: 'tool',
+      content: msg.content,
+      ...(msg.toolName ? { name: msg.toolName } : {})
+    }
+  }
   const base: Record<string, unknown> = { role: msg.role, content: msg.content }
   if (msg.images && msg.images.length > 0) {
     base.images = msg.images.map((i) => i.data)

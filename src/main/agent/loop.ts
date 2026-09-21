@@ -13,7 +13,7 @@ import { classifyToolRisk, shouldAutoAllow } from '../safety/permissions'
 import { getTool, listToolDefinitions } from '../tools/registry'
 import type { ToolContext } from '../tools/types'
 import { recordTask } from './memory'
-import { buildPlan } from './planner'
+import { buildPlan, formatPlanSummary, isCreateBuildGoal } from './planner'
 
 export interface AgentLoopOptions {
   provider: ModelProvider
@@ -37,8 +37,11 @@ export interface AgentLoopResult {
 }
 
 const MAX_TOOL_RETRIES = 3
+/** Plan mode: at most this many inspect tools before forcing a written plan. */
+const PLAN_MAX_INSPECT_STEPS = 2
 
 export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopResult> {
+  const workspacePath = opts.workspacePath.trim()
   const maxSteps = opts.maxSteps ?? 20
   const mode = opts.mode ?? 'agent'
   const plan = buildPlan(opts.goal)
@@ -58,20 +61,35 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
     'browser_tabs_list',
     'ask_user'
   ])
-  const tools =
+  let tools =
     mode === 'plan' ? allTools.filter((t) => readOnlyNames.has(t.name)) : allTools
 
+  const createGoal = isCreateBuildGoal(opts.goal)
   const modeHint =
     mode === 'plan'
-      ? `MODE: PLAN ONLY. You may only inspect (read-only tools). Do not modify files, run shell writes, or publish. Produce a clear numbered plan and stop.`
-      : `When the goal is complete, respond with a short final summary and do not call more tools.`
+      ? [
+          'MODE: PLAN ONLY (read-only). You cannot create or modify files.',
+          'Inspect the workspace at most once (fs_list path="."). An empty folder is normal for create/build goals — do not list again.',
+          'Then output a clear numbered implementation plan as plain text and STOP. Do not call more tools after you understand the workspace.',
+          createGoal
+            ? 'This goal creates something new: prefer writing the plan immediately after one quick look (or none if the workspace path is already known).'
+            : '',
+          'Remind the user to switch to Agent mode to execute the plan.'
+        ]
+          .filter(Boolean)
+          .join(' ')
+      : `When the goal is complete, respond with a short final summary and do not call more tools.${
+          createGoal
+            ? ' For create/build goals in an empty workspace, use fs_write (and related tools) to scaffold files — do not keep listing an empty directory.'
+            : ''
+        }`
 
   const messages: ProviderChatMessage[] = [
     {
       role: 'system',
       content: `${SYSTEM_PROMPT_INJECTION_DEFENSE}
 
-Workspace: ${opts.workspacePath || '(not set — file tools will fail until Settings → workspace is set)'}
+Workspace: ${workspacePath || '(not set — file tools will fail until Settings → workspace is set)'}
 
 Goal: ${opts.goal}
 
@@ -84,6 +102,10 @@ ${modeHint}`
   let lastError: string | undefined
   let promptChars = opts.goal.length
   let completionChars = 0
+  let inspectSteps = 0
+  let lastToolSig = ''
+  let duplicateToolHits = 0
+  let forcePlanText = false
 
   while (steps < maxSteps) {
     if (opts.signal?.aborted) {
@@ -95,11 +117,12 @@ ${modeHint}`
     steps += 1
     let assistantText = ''
     const toolCalls: ToolCall[] = []
+    const turnTools = forcePlanText ? undefined : tools
 
     try {
       for await (const chunk of opts.provider.chat({
         messages,
-        tools,
+        tools: turnTools,
         stream: true,
         signal: opts.signal
       })) {
@@ -109,7 +132,7 @@ ${modeHint}`
           completionChars += chunk.text.length
           opts.onEvent({ type: 'thought', text: chunk.text })
         } else if (chunk.type === 'tool_call') {
-          toolCalls.push(chunk.toolCall)
+          if (!forcePlanText) toolCalls.push(chunk.toolCall)
         } else if (chunk.type === 'usage') {
           opts.onEvent({
             type: 'usage',
@@ -135,46 +158,84 @@ ${modeHint}`
     }
 
     if (toolCalls.length === 0) {
-      const summary = assistantText.trim() || 'Completed without further tool calls.'
+      const summary =
+        assistantText.trim() ||
+        (mode === 'plan' ? formatPlanSummary(plan) : 'Completed without further tool calls.')
       if (assistantText) {
         messages.push({ role: 'assistant', content: assistantText })
       }
-      const estPrompt = Math.ceil(promptChars / 4)
-      const estCompletion = Math.ceil(completionChars / 4)
-      opts.onEvent({
-        type: 'usage',
-        promptTokens: estPrompt,
-        completionTokens: estCompletion,
-        totalTokens: estPrompt + estCompletion
-      })
-      try {
-        recordTask(opts.goal, summary, 'success')
-      } catch {
-        // memory is best-effort
-      }
-      opts.onEvent({ type: 'status', status: 'success' })
-      opts.onEvent({ type: 'done', summary })
-      return { status: 'success', summary, plan }
+      emitUsage(opts, promptChars, completionChars)
+      return finishSuccess(opts, plan, summary)
     }
 
     // Prefer ONE tool per iteration (spec)
-    const call = toolCalls[0]
-    if (assistantText) {
-      messages.push({ role: 'assistant', content: assistantText })
-    }
+    const call = toolCalls[0]!
+    messages.push({
+      role: 'assistant',
+      content: assistantText,
+      toolCalls: [call]
+    })
 
-    const result = await executeToolCall(call, opts)
+    const result = await executeToolCall(call, { ...opts, workspacePath })
     promptChars += JSON.stringify(call.arguments).length + result.output.length
     messages.push({
       role: 'tool',
       content: formatToolResult(call, result),
-      toolCallId: call.id
+      toolCallId: call.id,
+      toolName: call.name
     })
 
     if (!result.ok) {
       lastError = result.error
-      // Loop continues — model can retry with different strategy (max steps bound)
     }
+
+    const sig = toolSignature(call)
+    if (sig === lastToolSig) {
+      duplicateToolHits += 1
+    } else {
+      lastToolSig = sig
+      duplicateToolHits = 0
+    }
+
+    if (mode === 'plan') {
+      inspectSteps += 1
+      const emptyList =
+        call.name === 'fs_list' &&
+        result.ok &&
+        (/\(empty directory\)/i.test(result.output) || /\b0 entries\b/i.test(result.output))
+      const shouldStopInspecting =
+        emptyList ||
+        duplicateToolHits >= 1 ||
+        inspectSteps >= PLAN_MAX_INSPECT_STEPS
+
+      if (shouldStopInspecting) {
+        forcePlanText = true
+        tools = []
+        messages.push({
+          role: 'user',
+          content:
+            'Stop inspecting. Output a numbered implementation plan as plain text now. ' +
+            'Do not call any tools. Mention that the user should switch to Agent mode to execute.'
+        })
+        continue
+      }
+    } else if (duplicateToolHits >= 1) {
+      messages.push({
+        role: 'user',
+        content:
+          `You already called ${call.name} with the same arguments. Do not repeat it. ` +
+          (result.ok && /\(empty directory\)/i.test(result.output)
+            ? 'The workspace is empty — proceed by creating files with fs_write (and related tools).'
+            : 'Use a different approach or finish with a short summary.')
+      })
+    }
+  }
+
+  // Plan mode: prefer delivering the heuristic plan over a hard failure at the step limit.
+  if (mode === 'plan') {
+    const summary = formatPlanSummary(plan)
+    emitUsage(opts, promptChars, completionChars)
+    return finishSuccess(opts, plan, summary)
   }
 
   const summary = lastError
@@ -188,6 +249,44 @@ ${modeHint}`
   opts.onEvent({ type: 'status', status: 'failed' })
   opts.onEvent({ type: 'done', summary })
   return { status: 'failed', summary, plan }
+}
+
+function finishSuccess(
+  opts: AgentLoopOptions,
+  plan: AgentPlan,
+  summary: string
+): AgentLoopResult {
+  try {
+    recordTask(opts.goal, summary, 'success')
+  } catch {
+    // memory is best-effort
+  }
+  opts.onEvent({ type: 'status', status: 'success' })
+  opts.onEvent({ type: 'done', summary })
+  return { status: 'success', summary, plan }
+}
+
+function emitUsage(opts: AgentLoopOptions, promptChars: number, completionChars: number): void {
+  const estPrompt = Math.ceil(promptChars / 4)
+  const estCompletion = Math.ceil(completionChars / 4)
+  opts.onEvent({
+    type: 'usage',
+    promptTokens: estPrompt,
+    completionTokens: estCompletion,
+    totalTokens: estPrompt + estCompletion
+  })
+}
+
+function toolSignature(call: ToolCall): string {
+  return `${call.name}:${stableArgs(call.arguments)}`
+}
+
+function stableArgs(args: Record<string, unknown>): string {
+  try {
+    return JSON.stringify(args, Object.keys(args).sort())
+  } catch {
+    return String(args)
+  }
 }
 
 async function executeToolCall(call: ToolCall, opts: AgentLoopOptions): Promise<ToolResult> {

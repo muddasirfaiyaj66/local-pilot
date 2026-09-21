@@ -74,6 +74,10 @@ export function Composer({
   const imageRef = useRef<HTMLInputElement>(null)
 
   const activeId = settings?.activeProviderId ?? ''
+  const looksLikeCreate = /\b(create|build|scaffold|make|implement|generate|bootstrap|set\s*up)\b/i.test(
+    draft
+  )
+  const showAgentHint = interactionMode === 'plan' && looksLikeCreate
 
   const onPick = async (files: FileList | null): Promise<void> => {
     if (!files) return
@@ -125,6 +129,21 @@ export function Composer({
                 </button>
               </div>
             ))}
+          </div>
+        )}
+
+        {showAgentHint && (
+          <div className="flex items-center justify-between gap-2 border-b border-[var(--color-border)] px-3 py-2 text-[11px] text-[var(--color-text-muted)]">
+            <span>
+              Plan mode is read-only. Switch to Agent to create files for this goal.
+            </span>
+            <button
+              type="button"
+              className="shrink-0 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2 py-0.5 text-[11px] text-[var(--color-text)] hover:bg-[var(--color-hover)]"
+              onClick={() => setInteractionMode('agent')}
+            >
+              Use Agent
+            </button>
           </div>
         )}
 

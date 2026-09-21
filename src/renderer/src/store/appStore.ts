@@ -824,7 +824,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           providerId,
           goal: content || trimmed,
           mode: interactionMode === 'plan' ? 'plan' : 'agent',
-          maxSteps: interactionMode === 'plan' ? 8 : 20
+          maxSteps: interactionMode === 'plan' ? 4 : 20
         })
         set((s) => ({
           activeRequestId: requestId,
