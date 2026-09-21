@@ -11,6 +11,17 @@ import { DiffReviewPane } from './components/DiffReviewPane'
 import { WorkspaceBanner, WorkspaceChip } from './components/WorkspaceBar'
 import logoMark from './assets/logo-mark.svg'
 
+function RunningAgentsBadge(): React.JSX.Element | null {
+  const sessions = useAppStore((s) => s.sessions)
+  const n = Object.values(sessions).filter((s) => s.run.isStreaming).length
+  if (n < 2) return null
+  return (
+    <span className="rounded-md bg-[var(--color-accent)]/15 px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-accent)]">
+      {n} agents
+    </span>
+  )
+}
+
 export default function App(): React.JSX.Element {
   const ready = useAppStore((s) => s.ready)
   const view = useAppStore((s) => s.view)
@@ -112,6 +123,7 @@ export default function App(): React.JSX.Element {
               <span className="text-[12px] font-medium text-[var(--color-text)]">LocalPilot</span>
               <span className="text-[var(--color-text-faint)]">·</span>
               <span className="text-[12px] text-[var(--color-text-muted)]">{modeLabel}</span>
+              <RunningAgentsBadge />
               <div className="flex-1" />
               <WorkspaceChip />
             </div>

@@ -7,11 +7,15 @@ export function PermissionModal(): React.JSX.Element | null {
   const setAskDraft = useAppStore((s) => s.setAskDraft)
   const respondPermission = useAppStore((s) => s.respondPermission)
   const respondAsk = useAppStore((s) => s.respondAsk)
+  const tasks = useAppStore((s) => s.tasks)
+  const requestToTask = useAppStore((s) => s.requestToTask)
   const [busy, setBusy] = useState(false)
 
   if (!pending) return null
 
   const isAsk = pending.toolName === 'ask_user'
+  const taskId = pending.taskId ?? requestToTask[pending.agentRequestId]
+  const taskTitle = tasks.find((t) => t.id === taskId)?.title
 
   const onAllow = async (): Promise<void> => {
     setBusy(true)
@@ -48,9 +52,14 @@ export function PermissionModal(): React.JSX.Element | null {
     >
       <div className="w-full max-w-lg rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] p-4 shadow-[0_16px_48px_rgba(0,0,0,0.5)]">
         <div className="flex items-center justify-between gap-2">
-          <h2 id="lp-perm-title" className="text-[14px] font-semibold text-[var(--color-text)]">
-            {isAsk ? 'Agent needs input' : 'Approve action'}
-          </h2>
+          <div>
+            <h2 id="lp-perm-title" className="text-[14px] font-semibold text-[var(--color-text)]">
+              {isAsk ? 'Agent needs input' : 'Approve action'}
+            </h2>
+            {taskTitle ? (
+              <p className="mt-0.5 text-[11px] text-[var(--color-text-faint)]">Chat: {taskTitle}</p>
+            ) : null}
+          </div>
           <span
             className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${
               pending.risk === 'critical'

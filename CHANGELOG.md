@@ -2,6 +2,12 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.8.0] — 2026-09-21
+
+### Added
+
+- **Multi-agent:** run agents in parallel across chats; sidebar shows running count, per-chat stop, stop-all; kill switch stops every agent
+
 ## [0.7.1] — 2026-09-21
 
 ### Added
