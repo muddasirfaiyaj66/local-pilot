@@ -47,12 +47,13 @@ const MODEL_IDLE_TIMEOUT_MS = 75_000
 /** Quality bar for greenfield app builds — bad scaffolds are the usual failure mode. */
 const BUILD_GUIDE = [
   'BUILD RULES (greenfield app):',
-  '1. Scaffold with real tooling instead of hand-writing configs: `npm create vite@latest . -- --template react` (add `-y`/non-interactive flags), then `npm install` via shell_run.',
-  '2. Never invent dependency versions or config that does not match what is installed. Tailwind v4 uses the `@tailwindcss/vite` plugin plus `@import "tailwindcss";` in the CSS and needs no tailwind.config.js; Tailwind v3 uses postcss with `@tailwind base/components/utilities`. Check the installed version before writing config.',
-  '3. Do not reference remote images, icon CDNs, or fonts that may not resolve. Use CSS gradients, inline SVG, or emoji so the page never renders broken placeholders.',
+  '1. NEVER run interactive generators (`npm create vite`, `npm init`, `create-react-app`, `yarn create`). There is no terminal input, so they cancel. Write the project files yourself with fs_write: package.json, vite.config.js, index.html, src/main.jsx, src/App.jsx, src/index.css.',
+  '2. Pin dependencies you know work together and keep config consistent with them. With Tailwind v4 use the `@tailwindcss/vite` plugin and `@import "tailwindcss";` in the CSS (no tailwind.config.js, no postcss directives). With Tailwind v3 use postcss plus `@tailwind base/components/utilities`. Do not mix the two.',
+  '3. Do not reference remote images, icon CDNs, or fonts that may not resolve. Use CSS gradients, inline SVG, or emoji so nothing renders as a broken placeholder.',
   '4. Write real content and layout — spacing, type scale, responsive grid, hover states — not a bare unstyled document.',
-  '5. Run it: `npm install` with shell_run, then `proc_start` with the dev command (for example `npm run dev`). Report the localhost URL.',
-  '6. Verify before finishing: call proc_logs and fix any compile or import error, then re-check. Finish only when the dev server compiles cleanly.'
+  '5. Install with shell_run (`npm install`), then start the app with proc_start (`npm run dev`) and report the localhost URL.',
+  '6. Verify before finishing: call proc_logs, fix any compile or import error, re-check. Finish only when the dev server compiles cleanly.',
+  '7. If a command fails, do not retry it with a different flag. Change approach.'
 ].join('\n')
 
 export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopResult> {
@@ -125,6 +126,8 @@ ${modeHint}`
   let lastToolSig = ''
   let duplicateToolHits = 0
   let forcePlanText = false
+  const fuzzyAttempts = new Map<string, number>()
+  const bannedApproaches = new Set<string>()
 
   while (steps < maxSteps) {
     if (opts.signal?.aborted) {
@@ -199,6 +202,22 @@ ${modeHint}`
       toolCalls: [call]
     })
 
+    if (bannedApproaches.has(fuzzySignature(call))) {
+      const blocked: ToolResult = {
+        ok: false,
+        output: '',
+        error: `Blocked: \`${describeCall(call)}\` failed repeatedly. Use a different approach.`
+      }
+      opts.onEvent({ type: 'tool_result', toolCallId: call.id, result: blocked })
+      messages.push({
+        role: 'tool',
+        content: formatToolResult(call, blocked),
+        toolCallId: call.id,
+        toolName: call.name
+      })
+      continue
+    }
+
     const result = await executeToolCall(call, { ...opts, workspacePath })
     promptChars += JSON.stringify(call.arguments).length + result.output.length
     messages.push({
@@ -218,6 +237,27 @@ ${modeHint}`
     } else {
       lastToolSig = sig
       duplicateToolHits = 0
+    }
+
+    // Near-duplicate guard: models retry the same failing command with tiny flag
+    // tweaks, which burns the whole step budget. Escalate, then ban the approach.
+    const fuzzy = fuzzySignature(call)
+    const attempts = (fuzzyAttempts.get(fuzzy) ?? 0) + 1
+    fuzzyAttempts.set(fuzzy, attempts)
+
+    if (!result.ok && attempts >= 2) {
+      const banned = attempts >= 3
+      if (banned) bannedApproaches.add(fuzzy)
+      messages.push({
+        role: 'user',
+        content: banned
+          ? `STOP repeating this approach — \`${describeCall(call)}\` has failed ${attempts} times and is now forbidden. ` +
+            (call.name === 'shell_run'
+              ? 'Do not run that generator again. Create the project files yourself with fs_write (package.json, index.html, src files), then run `npm install`.'
+              : 'Use a completely different tool or finish with a short summary explaining what is blocked.')
+          : `\`${describeCall(call)}\` already failed. Changing a flag will not help — switch approach now (for scaffolding, write the files with fs_write instead of running a generator).`
+      })
+      if (banned) continue
     }
 
     if (mode === 'plan') {
@@ -321,6 +361,31 @@ function emitUsage(opts: AgentLoopOptions, promptChars: number, completionChars:
 
 function toolSignature(call: ToolCall): string {
   return `${call.name}:${stableArgs(call.arguments)}`
+}
+
+/**
+ * Signature that ignores cosmetic differences (flags, quoting, paths) so
+ * `npm create vite . --template react` and `... --template react -y` collide.
+ */
+export function fuzzySignature(call: ToolCall): string {
+  const command = call.arguments.command
+  if (typeof command === 'string') {
+    const words = command
+      .toLowerCase()
+      .replace(/@[\w.^~-]+/g, '')
+      .split(/\s+/)
+      .filter((w) => w.length > 0 && !w.startsWith('-') && w !== '.')
+    return `${call.name}:${words.slice(0, 3).join(' ')}`
+  }
+  const path = call.arguments.path ?? call.arguments.query ?? ''
+  return `${call.name}:${String(path).toLowerCase()}`
+}
+
+function describeCall(call: ToolCall): string {
+  const command = call.arguments.command
+  if (typeof command === 'string') return command
+  const path = call.arguments.path
+  return typeof path === 'string' ? `${call.name} ${path}` : call.name
 }
 
 function stableArgs(args: Record<string, unknown>): string {

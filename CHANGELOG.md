@@ -2,6 +2,15 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.10.1] — 2026-09-21
+
+### Fixed
+
+- Failed shell commands are reported as failures — a non-zero exit code used to come back as success, so the agent kept retrying
+- Interactive generators (`npm create vite`, `npm init`) no longer stall the run: commands get no TTY, run with `CI=1` / `npm_config_yes`, and a cancelled prompt returns actionable guidance
+- Near-identical retries are detected and blocked after repeated failures, instead of burning the whole step budget on flag tweaks
+- Greenfield builds write project files directly rather than invoking interactive scaffolders
+
 ## [0.10.0] — 2026-09-21
 
 ### Added

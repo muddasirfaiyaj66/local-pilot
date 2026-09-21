@@ -1,6 +1,6 @@
 {
   "name": "localpilot",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "LocalPilot — cross-platform desktop AI agent that controls your computer",
   "main": "./out/main/index.js",
   "author": "muddasirfaiyaj66",

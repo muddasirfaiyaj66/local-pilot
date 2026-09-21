@@ -108,7 +108,7 @@ export const processTools: RegisteredTool[] = [
         const id = `p${counter}`
         const child = spawnShell(args.command, {
           cwd,
-          env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' }
+          extraEnv: { FORCE_COLOR: '0', NO_COLOR: '1' }
         })
 
         const proc: ManagedProcess = {

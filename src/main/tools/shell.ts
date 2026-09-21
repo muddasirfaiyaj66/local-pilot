@@ -30,7 +30,7 @@ export function isDeniedCommand(command: string): boolean {
  */
 export function spawnShell(
   command: string,
-  options: { cwd: string; env?: NodeJS.ProcessEnv }
+  options: { cwd: string; extraEnv?: NodeJS.ProcessEnv }
 ): ReturnType<typeof spawn> {
   const isWin = process.platform === 'win32'
   return spawn(
@@ -38,11 +38,38 @@ export function spawnShell(
     isWin ? ['/d', '/s', '/c', command] : ['-lc', command],
     {
       cwd: options.cwd,
-      env: options.env ?? process.env,
+      env: { ...nonInteractiveEnv(), ...options.extraEnv },
       windowsHide: true,
+      // No TTY: prompts must fail fast instead of waiting for input that never comes.
+      stdio: ['ignore', 'pipe', 'pipe'],
       ...(isWin ? { windowsVerbatimArguments: true } : {})
     }
   )
+}
+
+/** Keep generators (npx, npm init, yarn create) from stopping on prompts. */
+function nonInteractiveEnv(): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    CI: '1',
+    npm_config_yes: 'true',
+    npm_config_audit: 'false',
+    npm_config_fund: 'false',
+    ADBLOCK: '1'
+  }
+}
+
+const PROMPT_MARKERS = [
+  /operation cancelled/i,
+  /ok to proceed\?/i,
+  /\(y\/n\)/i,
+  /press any key/i,
+  /\? .*›/
+]
+
+/** Commands that stalled on an interactive question report success otherwise. */
+export function looksInteractive(output: string): boolean {
+  return PROMPT_MARKERS.some((re) => re.test(output))
 }
 
 export const shellTools: RegisteredTool[] = [
@@ -92,6 +119,16 @@ export const shellTools: RegisteredTool[] = [
 
         const timeout = args.timeoutMs ?? 60_000
         const output = await runCommand(args.command, cwd, timeout, ctx.signal)
+
+        if (looksInteractive(output.text)) {
+          return errResult(
+            'Command needs interactive input, which is not available. Use non-interactive flags (npx --yes, --template, --skip-*) or write the files directly instead of running a generator.',
+            output.text
+          )
+        }
+        if (output.code !== 0) {
+          return errResult(`Command failed with exit code ${output.code ?? '?'}`, output.text)
+        }
         return okResult(output.text, { exitCode: output.code, cwd })
       } catch (err) {
         return errResult(err instanceof Error ? err.message : String(err))

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ChatStreamChunk } from '@shared/types'
 import type { ModelProvider, ProviderChatParams } from '../providers/base'
-import { runAgentLoop } from './loop'
+import { fuzzySignature, runAgentLoop } from './loop'
 
 class ScriptedProvider implements ModelProvider {
   readonly kind = 'mock'
@@ -39,7 +39,65 @@ function listCall(id: string): ChatStreamChunk[] {
   ]
 }
 
+function shellCall(id: string, command: string): ChatStreamChunk[] {
+  return [
+    {
+      type: 'tool_call',
+      toolCall: { id, name: 'shell_run', arguments: { command } }
+    },
+    { type: 'done', finishReason: 'tool_calls' }
+  ]
+}
+
+describe('fuzzySignature', () => {
+  it('collapses flag-only variations of the same command', () => {
+    const a = fuzzySignature({ id: '1', name: 'shell_run', arguments: { command: 'npm create vite@latest . --template react' } })
+    const b = fuzzySignature({ id: '2', name: 'shell_run', arguments: { command: 'npm create vite . --template react -y' } })
+    expect(a).toBe(b)
+  })
+
+  it('separates genuinely different commands', () => {
+    const a = fuzzySignature({ id: '1', name: 'shell_run', arguments: { command: 'npm install' } })
+    const b = fuzzySignature({ id: '2', name: 'shell_run', arguments: { command: 'npm run dev' } })
+    expect(a).not.toBe(b)
+  })
+})
+
 describe('runAgentLoop', () => {
+  it('blocks a failing command after repeated near-identical retries', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lp-ban-'))
+    try {
+      // Same doomed generator, retried with cosmetic flag tweaks each turn.
+      const provider = new ScriptedProvider([
+        shellCall('c1', 'node -e "process.exit(4)" --template react'),
+        shellCall('c2', 'node -e "process.exit(4)" --template react -y'),
+        shellCall('c3', 'node -e "process.exit(4)" --template react --yes'),
+        shellCall('c4', 'node -e "process.exit(4)" --template react --force'),
+        [{ type: 'text', text: 'Switching approach.' }, { type: 'done', finishReason: 'stop' }]
+      ])
+
+      const results: Array<{ ok: boolean; error?: string }> = []
+      await runAgentLoop({
+        provider,
+        goal: 'Create a website',
+        workspacePath: dir,
+        permissionMode: 'autonomous',
+        maxSteps: 6,
+        onEvent: (e) => {
+          if (e.type === 'tool_result') results.push({ ok: e.result.ok, error: e.result.error })
+        },
+        requestPermission: async () => true,
+        askUser: async () => 'yes'
+      })
+
+      expect(results.length).toBeGreaterThanOrEqual(3)
+      expect(results.every((r) => !r.ok)).toBe(true)
+      expect(results.at(-1)?.error).toContain('Blocked')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('completes when the model returns text without tools', async () => {
     const provider = new ScriptedProvider([
       [
