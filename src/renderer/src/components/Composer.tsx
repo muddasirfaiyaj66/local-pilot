@@ -1,7 +1,8 @@
-import { PaperPlaneTilt, Stop } from '@phosphor-icons/react'
-import type { FormEvent, KeyboardEvent, RefObject } from 'react'
-import { useAppStore } from '../store/appStore'
+import { Image as ImageIcon, Paperclip, PaperPlaneTilt, Stop, X } from '@phosphor-icons/react'
+import { useRef, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
+import { useAppStore, type InteractionMode } from '../store/appStore'
 import type { PermissionMode } from '@shared/types'
+import { ContextMeter } from './ContextMeter'
 
 const MODES: { id: PermissionMode; label: string }[] = [
   { id: 'ask-every-time', label: 'Ask always' },
@@ -18,7 +19,38 @@ interface ComposerProps {
   canSend: boolean
 }
 
-/** Cursor-style elevated composer docked over the chat */
+async function readFileAsAttachment(file: File): Promise<{
+  name: string
+  kind: 'image' | 'file'
+  mimeType: string
+  data?: string
+  textContent?: string
+  size: number
+}> {
+  const isImage = file.type.startsWith('image/')
+  if (isImage) {
+    const buf = await file.arrayBuffer()
+    const bytes = new Uint8Array(buf)
+    let binary = ''
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!)
+    return {
+      name: file.name,
+      kind: 'image',
+      mimeType: file.type || 'image/png',
+      data: btoa(binary),
+      size: file.size
+    }
+  }
+  const text = await file.text()
+  return {
+    name: file.name,
+    kind: 'file',
+    mimeType: file.type || 'text/plain',
+    textContent: text,
+    size: file.size
+  }
+}
+
 export function Composer({
   draft,
   setDraft,
@@ -32,18 +64,70 @@ export function Composer({
   const providers = useAppStore((s) => s.providers)
   const settings = useAppStore((s) => s.settings)
   const isStreaming = useAppStore((s) => s.isStreaming)
+  const attachments = useAppStore((s) => s.attachments)
+  const addAttachment = useAppStore((s) => s.addAttachment)
+  const removeAttachment = useAppStore((s) => s.removeAttachment)
   const setActiveProvider = useAppStore((s) => s.setActiveProvider)
   const setPermissionMode = useAppStore((s) => s.setPermissionMode)
   const stopStreaming = useAppStore((s) => s.stopStreaming)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const imageRef = useRef<HTMLInputElement>(null)
 
   const activeId = settings?.activeProviderId ?? ''
 
+  const onPick = async (files: FileList | null): Promise<void> => {
+    if (!files) return
+    for (const file of Array.from(files)) {
+      if (file.size > 8_000_000) continue
+      const att = await readFileAsAttachment(file)
+      addAttachment(att)
+    }
+  }
+
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[var(--color-bg)] via-[var(--color-bg)] to-transparent px-4 pb-4 pt-10">
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[var(--color-bg)] via-[var(--color-bg)] to-transparent px-4 pb-3 pt-10">
       <form
         onSubmit={onSubmit}
         className="pointer-events-auto mx-auto w-full max-w-[720px] rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] shadow-[0_8px_30px_rgba(0,0,0,0.45)]"
+        onDragOver={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          void onPick(e.dataTransfer.files)
+        }}
       >
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 border-b border-[var(--color-border)] px-3 pt-2.5 pb-2">
+            {attachments.map((a) => (
+              <div
+                key={a.id}
+                className="flex max-w-[200px] items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[11px]"
+              >
+                {a.kind === 'image' && a.data ? (
+                  <img
+                    src={`data:${a.mimeType};base64,${a.data}`}
+                    alt=""
+                    className="h-6 w-6 rounded object-cover"
+                  />
+                ) : (
+                  <Paperclip size={12} className="text-[var(--color-text-faint)]" aria-hidden />
+                )}
+                <span className="truncate text-[var(--color-text-muted)]">{a.name}</span>
+                <button
+                  type="button"
+                  className="lp-icon-btn !h-5 !w-5"
+                  aria-label={`Remove ${a.name}`}
+                  onClick={() => removeAttachment(a.id)}
+                >
+                  <X size={10} aria-hidden />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <label className="sr-only" htmlFor="lp-composer">
           Message
         </label>
@@ -55,20 +139,23 @@ export function Composer({
           onKeyDown={onKeyDown}
           rows={3}
           placeholder={
-            interactionMode === 'agent'
-              ? 'Give the agent a goal (needs workspace in Settings)…'
-              : 'Chat with the model…'
+            interactionMode === 'plan'
+              ? 'Describe a goal — Plan mode inspects only, then proposes steps…'
+              : interactionMode === 'agent'
+                ? 'Give the agent a goal (workspace required)…'
+                : 'Chat with the model…'
           }
           className="min-h-[64px] w-full resize-none border-0 bg-transparent px-3.5 pt-3 pb-1 text-[13px] leading-relaxed text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-faint)]"
         />
-        <div className="flex flex-wrap items-center gap-1 px-2 pb-2">
+        <div className="flex flex-wrap items-center gap-0.5 px-2 pb-2">
           <select
             aria-label="Interaction mode"
             value={interactionMode}
-            onChange={(e) => setInteractionMode(e.target.value as 'chat' | 'agent')}
+            onChange={(e) => setInteractionMode(e.target.value as InteractionMode)}
             className="lp-select"
           >
             <option value="agent">Agent</option>
+            <option value="plan">Plan</option>
             <option value="chat">Chat</option>
           </select>
 
@@ -76,7 +163,7 @@ export function Composer({
             aria-label="Model provider"
             value={activeId}
             onChange={(e) => void setActiveProvider(e.target.value)}
-            className="lp-select max-w-[180px] truncate"
+            className="lp-select max-w-[200px] truncate"
           >
             {providers.map((p) => (
               <option key={p.id} value={p.id}>
@@ -85,21 +172,65 @@ export function Composer({
             ))}
           </select>
 
-          <select
-            aria-label="Permission mode"
-            value={settings?.permissionMode ?? 'ask-risky'}
-            onChange={(e) => void setPermissionMode(e.target.value as PermissionMode)}
-            className="lp-select"
-            title="Ctrl/Cmd+Shift+Esc stops the agent"
-          >
-            {MODES.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-              </option>
-            ))}
-          </select>
+          {interactionMode !== 'chat' && (
+            <select
+              aria-label="Permission mode"
+              value={settings?.permissionMode ?? 'ask-risky'}
+              onChange={(e) => void setPermissionMode(e.target.value as PermissionMode)}
+              className="lp-select"
+              title="Ctrl/Cmd+Shift+Esc stops the agent"
+            >
+              {MODES.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          )}
 
-          <div className="flex-1" />
+          <input
+            ref={imageRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            multiple
+            onChange={(e) => {
+              void onPick(e.target.files)
+              e.target.value = ''
+            }}
+          />
+          <input
+            ref={fileRef}
+            type="file"
+            className="hidden"
+            multiple
+            onChange={(e) => {
+              void onPick(e.target.files)
+              e.target.value = ''
+            }}
+          />
+          <button
+            type="button"
+            className="lp-icon-btn"
+            title="Attach image"
+            aria-label="Attach image"
+            onClick={() => imageRef.current?.click()}
+          >
+            <ImageIcon size={16} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="lp-icon-btn"
+            title="Attach file"
+            aria-label="Attach file"
+            onClick={() => fileRef.current?.click()}
+          >
+            <Paperclip size={16} aria-hidden />
+          </button>
+
+          <div className="min-w-0 flex-1 px-1">
+            <ContextMeter />
+          </div>
 
           {isStreaming ? (
             <button

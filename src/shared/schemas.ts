@@ -58,6 +58,12 @@ export type ToolCall = z.infer<typeof ToolCallSchema>
 export const ChatStreamChunkSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), text: z.string() }),
   z.object({ type: z.literal('tool_call'), toolCall: ToolCallSchema }),
+  z.object({
+    type: z.literal('usage'),
+    promptTokens: z.number().optional(),
+    completionTokens: z.number().optional(),
+    totalTokens: z.number().optional()
+  }),
   z.object({ type: z.literal('error'), message: z.string() }),
   z.object({ type: z.literal('done'), finishReason: z.string().optional() })
 ])

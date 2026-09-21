@@ -33,10 +33,10 @@ export const DEFAULT_PROVIDERS: Array<Omit<ProviderConfig, 'hasApiKey'> & { hasA
     {
       id: 'ollama-local',
       kind: 'ollama',
-      name: 'Ollama (local)',
+      name: 'Ollama',
       baseUrl: 'http://127.0.0.1:11434',
-      model: 'llama3.2',
-      visionEnabled: false,
+      model: 'gemma4:31b-cloud',
+      visionEnabled: true,
       enabled: true
     },
     {

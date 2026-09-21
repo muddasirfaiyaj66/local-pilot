@@ -117,7 +117,29 @@ export class SettingsStore {
       }))
       this.settings.activeProviderId = this.settings.providers[0]?.id ?? null
       this.persistSettings()
+      return
     }
+
+    // Prefer cloud Gemma as the default Ollama model for new sessions
+    let changed = false
+    for (const p of this.settings.providers) {
+      if (p.id === 'ollama-local' && p.kind === 'ollama') {
+        if (p.model === 'llama3.2' || p.model === 'llama3.2:latest') {
+          p.model = 'gemma4:31b-cloud'
+          p.visionEnabled = true
+          p.name = 'Ollama'
+          changed = true
+        }
+      }
+    }
+    if (!this.settings.activeProviderId) {
+      this.settings.activeProviderId =
+        this.settings.providers.find((p) => p.id === 'ollama-local')?.id ??
+        this.settings.providers[0]?.id ??
+        null
+      changed = true
+    }
+    if (changed) this.persistSettings()
   }
 
   private loadSettings(): AppSettings {

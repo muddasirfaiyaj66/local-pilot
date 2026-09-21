@@ -7,6 +7,7 @@ import { MessageList } from './components/MessageList'
 import { LivePreviewPane } from './components/LivePreviewPane'
 import { Composer } from './components/Composer'
 import { PermissionModal } from './components/PermissionModal'
+import { DiffReviewPane } from './components/DiffReviewPane'
 import logoMark from './assets/logo-mark.svg'
 
 export default function App(): React.JSX.Element {
@@ -15,6 +16,8 @@ export default function App(): React.JSX.Element {
   const init = useAppStore((s) => s.init)
   const sendMessage = useAppStore((s) => s.sendMessage)
   const isStreaming = useAppStore((s) => s.isStreaming)
+  const attachments = useAppStore((s) => s.attachments)
+  const interactionMode = useAppStore((s) => s.interactionMode)
   const setView = useAppStore((s) => s.setView)
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -28,7 +31,7 @@ export default function App(): React.JSX.Element {
   }, [ready, view])
 
   const submit = (): void => {
-    if (!draft.trim() || isStreaming) return
+    if ((!draft.trim() && attachments.length === 0) || isStreaming) return
     const text = draft
     setDraft('')
     void sendMessage(text)
@@ -57,6 +60,9 @@ export default function App(): React.JSX.Element {
       </div>
     )
   }
+
+  const modeLabel =
+    interactionMode === 'plan' ? 'Plan' : interactionMode === 'agent' ? 'Agent' : 'Chat'
 
   return (
     <div className="flex h-full bg-[var(--color-bg)]">
@@ -104,16 +110,17 @@ export default function App(): React.JSX.Element {
               <img src={logoMark} alt="" width={16} height={16} className="rounded-[3px]" />
               <span className="text-[12px] font-medium text-[var(--color-text)]">LocalPilot</span>
               <span className="text-[var(--color-text-faint)]">·</span>
-              <span className="text-[12px] text-[var(--color-text-muted)]">Agent · Phase 4</span>
+              <span className="text-[12px] text-[var(--color-text-muted)]">{modeLabel}</span>
             </div>
             <MessageList />
+            <DiffReviewPane />
             <Composer
               draft={draft}
               setDraft={setDraft}
               inputRef={inputRef}
               onSubmit={onSubmit}
               onKeyDown={onKeyDown}
-              canSend={Boolean(draft.trim()) && !isStreaming}
+              canSend={(Boolean(draft.trim()) || attachments.length > 0) && !isStreaming}
             />
           </main>
           <LivePreviewPane />

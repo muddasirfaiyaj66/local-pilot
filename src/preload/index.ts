@@ -72,6 +72,11 @@ const api: LocalPilotApi = {
       width?: number
       height?: number
       error?: string
+    }>,
+  restoreFile: (path, content) =>
+    ipcRenderer.invoke(IpcChannels.fsRestore, path, content) as Promise<{
+      ok: boolean
+      error?: string
     }>
 }
 

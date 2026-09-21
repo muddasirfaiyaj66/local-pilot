@@ -32,7 +32,8 @@ export const IpcChannels = {
   screenPreview: 'screen:preview',
   appGetVersion: 'app:get-version',
   appGetPlatform: 'app:get-platform',
-  appCheckUpdates: 'app:check-updates'
+  appCheckUpdates: 'app:check-updates',
+  fsRestore: 'fs:restore'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
@@ -104,6 +105,7 @@ export interface LocalPilotApi {
     height?: number
     error?: string
   }>
+  restoreFile: (path: string, content: string) => Promise<{ ok: boolean; error?: string }>
 }
 
 export type { AgentStartRequest, PermissionRequest }

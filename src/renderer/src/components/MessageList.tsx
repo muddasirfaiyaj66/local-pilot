@@ -4,9 +4,9 @@ import { useAppStore } from '../store/appStore'
 import logoMark from '../assets/logo-mark.svg'
 
 const EXAMPLES = [
-  'What can you do in Phase 1?',
-  'Help me connect Ollama',
-  'Draft a concise PR description'
+  'Plan how to fix failing tests in this repo',
+  'Explain the LocalPilot agent loop',
+  'Resize an image in the workspace to 1080×1080'
 ]
 
 export function MessageList(): React.JSX.Element {
@@ -16,16 +16,17 @@ export function MessageList(): React.JSX.Element {
   const error = useAppStore((s) => s.error)
   const sendMessage = useAppStore((s) => s.sendMessage)
   const setView = useAppStore((s) => s.setView)
+  const plan = useAppStore((s) => s.plan)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streamingText])
+  }, [messages, streamingText, plan])
 
   const showEmptyHint = messages.length === 0 && !isStreaming
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 pb-36 pt-4" aria-live="polite">
+    <div className="flex-1 overflow-y-auto px-4 pb-44 pt-4" aria-live="polite">
       <div className="mx-auto flex w-full max-w-[720px] flex-col gap-5">
         {showEmptyHint && (
           <div className="flex flex-col items-center px-4 py-16 text-center">
@@ -34,8 +35,8 @@ export function MessageList(): React.JSX.Element {
               LocalPilot
             </h2>
             <p className="mt-2 max-w-sm text-[13px] text-[var(--color-text-muted)]">
-              Your local desktop AI agent. Phase 1 is streaming chat with your models — browser,
-              files, and screen control arrive next.
+              Cursor-style desktop agent. Chat, Plan, or Agent — attach images/files, review diffs,
+              and watch context usage.
             </p>
             <div className="mt-6 flex max-w-md flex-wrap justify-center gap-2">
               {EXAMPLES.map((ex) => (
@@ -43,13 +44,37 @@ export function MessageList(): React.JSX.Element {
                   key={ex}
                   type="button"
                   onClick={() => void sendMessage(ex)}
-                  className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
+                  className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
                 >
                   {ex}
                 </button>
               ))}
             </div>
           </div>
+        )}
+
+        {plan && plan.steps.length > 0 && (
+          <section
+            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5"
+            aria-label="Plan"
+          >
+            <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-faint)]">
+              Plan
+            </div>
+            <ol className="space-y-1">
+              {plan.steps.map((step, i) => (
+                <li
+                  key={step.id}
+                  className="flex gap-2 text-[12px] text-[var(--color-text-muted)]"
+                >
+                  <span className="font-[var(--font-mono)] text-[var(--color-text-faint)]">
+                    {i + 1}.
+                  </span>
+                  <span className="text-[var(--color-text)]">{step.title}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
         )}
 
         {messages.map((m) => (
@@ -68,6 +93,18 @@ export function MessageList(): React.JSX.Element {
               <div className="mb-1 text-[12px] font-medium text-[var(--color-text)]">
                 {m.role === 'user' ? 'You' : 'LocalPilot'}
               </div>
+              {m.images && m.images.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {m.images.map((img, i) => (
+                    <img
+                      key={i}
+                      src={`data:${img.mimeType};base64,${img.data}`}
+                      alt="Attachment"
+                      className="max-h-40 rounded-md border border-[var(--color-border)]"
+                    />
+                  ))}
+                </div>
+              )}
               <div className="whitespace-pre-wrap break-words text-[13px] leading-[1.6] text-[var(--color-text)]">
                 {m.content}
               </div>
@@ -102,7 +139,12 @@ export function MessageList(): React.JSX.Element {
             role="alert"
             className="flex items-start gap-2 rounded-lg border border-[var(--color-danger)]/40 bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)] px-3 py-2.5 text-[13px]"
           >
-            <WarningCircle size={16} weight="fill" className="mt-0.5 text-[var(--color-danger)]" aria-hidden />
+            <WarningCircle
+              size={16}
+              weight="fill"
+              className="mt-0.5 text-[var(--color-danger)]"
+              aria-hidden
+            />
             <div className="min-w-0 flex-1">
               <div className="font-medium text-[var(--color-text)]">Something went wrong</div>
               <div className="mt-0.5 text-[var(--color-text-muted)]">{error}</div>

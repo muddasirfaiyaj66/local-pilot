@@ -1,5 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { ChatRequestSchema } from '@shared/schemas'
 import { AgentStartRequestSchema, type PermissionRequest } from '@shared/agent'
 import {
@@ -31,6 +33,18 @@ export function registerIpcHandlers(store: SettingsStore): void {
     const { checkForUpdatesNow } = await import('../updater')
     return checkForUpdatesNow()
   })
+  ipcMain.handle(
+    IpcChannels.fsRestore,
+    (_e, filePath: string, content: string): { ok: boolean; error?: string } => {
+      try {
+        mkdirSync(dirname(filePath), { recursive: true })
+        writeFileSync(filePath, content, 'utf8')
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    }
+  )
   ipcMain.handle(IpcChannels.settingsGet, () => store.getSettings())
   ipcMain.handle(
     IpcChannels.settingsSet,
@@ -179,6 +193,7 @@ export function registerIpcHandlers(store: SettingsStore): void {
           workspacePath: settings.workspacePath,
           permissionMode: settings.permissionMode,
           maxSteps: request.maxSteps,
+          mode: request.mode,
           signal: controller.signal,
           onEvent: (agentEvent) => emit({ requestId, event: agentEvent }),
           requestPermission: (permission: PermissionRequest) =>

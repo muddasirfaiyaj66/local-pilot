@@ -79,10 +79,10 @@ npm run dev
 
 | Use case | Suggestion |
 |----------|------------|
-| Local, fast | `llama3.2`, `qwen2.5:7b` (Ollama) |
+| Local, fast | `gemma4:31b-cloud` (default), `llama3.2`, `qwen2.5:7b` |
 | Local, stronger | `qwen2.5:14b` / larger if VRAM allows |
 | Cloud chat | `gpt-4o-mini`, Claude via OpenRouter (`…/api/v1`) |
-| Vision (later) | `llava`, `qwen2.5-vl`, UI-TARS-class models |
+| Vision | `gemma4:31b-cloud`, `llava`, `qwen2.5-vl`, UI-TARS-class models |
 
 ## Architecture
 

@@ -20,6 +20,8 @@ export interface AgentLoopOptions {
   goal: string
   workspacePath: string
   permissionMode: PermissionMode
+  /** plan = read-only tools + produce a plan; agent = full tools */
+  mode?: 'agent' | 'plan'
   maxSteps?: number
   signal?: AbortSignal
   onEvent: (event: AgentEvent) => void
@@ -38,11 +40,32 @@ const MAX_TOOL_RETRIES = 3
 
 export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopResult> {
   const maxSteps = opts.maxSteps ?? 20
+  const mode = opts.mode ?? 'agent'
   const plan = buildPlan(opts.goal)
   opts.onEvent({ type: 'plan', plan })
   opts.onEvent({ type: 'status', status: 'running' })
 
-  const tools = listToolDefinitions()
+  const allTools = listToolDefinitions()
+  const readOnlyNames = new Set([
+    'fs_read',
+    'fs_list',
+    'fs_search',
+    'code_git_status',
+    'code_git_diff',
+    'memory_search',
+    'memory_list',
+    'browser_get_dom_snapshot',
+    'browser_tabs_list',
+    'ask_user'
+  ])
+  const tools =
+    mode === 'plan' ? allTools.filter((t) => readOnlyNames.has(t.name)) : allTools
+
+  const modeHint =
+    mode === 'plan'
+      ? `MODE: PLAN ONLY. You may only inspect (read-only tools). Do not modify files, run shell writes, or publish. Produce a clear numbered plan and stop.`
+      : `When the goal is complete, respond with a short final summary and do not call more tools.`
+
   const messages: ProviderChatMessage[] = [
     {
       role: 'system',
@@ -52,13 +75,15 @@ Workspace: ${opts.workspacePath || '(not set — file tools will fail until Sett
 
 Goal: ${opts.goal}
 
-When the goal is complete, respond with a short final summary and do not call more tools.`
+${modeHint}`
     },
     { role: 'user', content: opts.goal }
   ]
 
   let steps = 0
   let lastError: string | undefined
+  let promptChars = opts.goal.length
+  let completionChars = 0
 
   while (steps < maxSteps) {
     if (opts.signal?.aborted) {
@@ -81,9 +106,17 @@ When the goal is complete, respond with a short final summary and do not call mo
         if (opts.signal?.aborted) break
         if (chunk.type === 'text') {
           assistantText += chunk.text
+          completionChars += chunk.text.length
           opts.onEvent({ type: 'thought', text: chunk.text })
         } else if (chunk.type === 'tool_call') {
           toolCalls.push(chunk.toolCall)
+        } else if (chunk.type === 'usage') {
+          opts.onEvent({
+            type: 'usage',
+            promptTokens: chunk.promptTokens,
+            completionTokens: chunk.completionTokens,
+            totalTokens: chunk.totalTokens
+          })
         } else if (chunk.type === 'error') {
           opts.onEvent({ type: 'error', message: chunk.message })
           opts.onEvent({ type: 'status', status: 'failed' })
@@ -106,6 +139,14 @@ When the goal is complete, respond with a short final summary and do not call mo
       if (assistantText) {
         messages.push({ role: 'assistant', content: assistantText })
       }
+      const estPrompt = Math.ceil(promptChars / 4)
+      const estCompletion = Math.ceil(completionChars / 4)
+      opts.onEvent({
+        type: 'usage',
+        promptTokens: estPrompt,
+        completionTokens: estCompletion,
+        totalTokens: estPrompt + estCompletion
+      })
       try {
         recordTask(opts.goal, summary, 'success')
       } catch {
@@ -123,6 +164,7 @@ When the goal is complete, respond with a short final summary and do not call mo
     }
 
     const result = await executeToolCall(call, opts)
+    promptChars += JSON.stringify(call.arguments).length + result.output.length
     messages.push({
       role: 'tool',
       content: formatToolResult(call, result),

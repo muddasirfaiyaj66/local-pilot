@@ -111,9 +111,16 @@ export const fsTools: RegisteredTool[] = [
     execute: wrap(async (raw, ctx) => {
       const args = WriteArgs.parse(raw)
       const full = resolveInWorkspace(ctx.workspacePath, args.path)
+      const before = existsSync(full) ? readFileSync(full, 'utf8') : ''
       mkdirSync(dirname(full), { recursive: true })
       writeFileSync(full, args.content, 'utf8')
-      return okResult(`Wrote ${args.content.length} chars to ${full}`)
+      return okResult(`Wrote ${args.content.length} chars to ${full}`, {
+        path: full,
+        relativePath: args.path,
+        before,
+        after: args.content,
+        kind: 'write'
+      })
     })
   },
   {
@@ -136,13 +143,19 @@ export const fsTools: RegisteredTool[] = [
     execute: wrap(async (raw, ctx) => {
       const args = EditArgs.parse(raw)
       const full = resolveInWorkspace(ctx.workspacePath, args.path)
-      const current = readFileSync(full, 'utf8')
-      if (!current.includes(args.oldText)) {
+      const before = readFileSync(full, 'utf8')
+      if (!before.includes(args.oldText)) {
         return errResult('oldText not found in file (exact match required)')
       }
-      const next = current.replace(args.oldText, args.newText)
-      writeFileSync(full, next, 'utf8')
-      return okResult(`Edited ${full}`)
+      const after = before.replace(args.oldText, args.newText)
+      writeFileSync(full, after, 'utf8')
+      return okResult(`Edited ${full}`, {
+        path: full,
+        relativePath: args.path,
+        before,
+        after,
+        kind: 'edit'
+      })
     })
   },
   {

@@ -19,6 +19,8 @@ interface OllamaChatResponse {
   }
   done?: boolean
   error?: string
+  prompt_eval_count?: number
+  eval_count?: number
 }
 
 interface OllamaTagsResponse {
@@ -130,6 +132,16 @@ export class OllamaProvider implements ModelProvider {
             }
           }
           if (parsed.done) {
+            const prompt = parsed.prompt_eval_count
+            const completion = parsed.eval_count
+            if (prompt != null || completion != null) {
+              yield {
+                type: 'usage',
+                promptTokens: prompt,
+                completionTokens: completion,
+                totalTokens: (prompt ?? 0) + (completion ?? 0)
+              }
+            }
             yield { type: 'done', finishReason: 'stop' }
             return
           }

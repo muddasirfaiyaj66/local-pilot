@@ -48,6 +48,12 @@ export const AgentEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('permission_required'), permission: PermissionRequestSchema }),
   z.object({ type: z.literal('status'), status: z.enum(['running', 'waiting', 'success', 'failed', 'stopped']) }),
   z.object({ type: z.literal('error'), message: z.string() }),
+  z.object({
+    type: z.literal('usage'),
+    promptTokens: z.number().optional(),
+    completionTokens: z.number().optional(),
+    totalTokens: z.number().optional()
+  }),
   z.object({ type: z.literal('done'), summary: z.string().optional() })
 ])
 export type AgentEvent = z.infer<typeof AgentEventSchema>
@@ -55,6 +61,7 @@ export type AgentEvent = z.infer<typeof AgentEventSchema>
 export const AgentStartRequestSchema = z.object({
   providerId: z.string(),
   goal: z.string().min(1),
+  mode: z.enum(['agent', 'plan']).default('agent'),
   messages: z.array(
     z.object({
       role: z.enum(['system', 'user', 'assistant', 'tool']),

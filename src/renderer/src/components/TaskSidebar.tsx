@@ -1,4 +1,4 @@
-import { Plus } from '@phosphor-icons/react'
+import { Plus, Trash } from '@phosphor-icons/react'
 import { useAppStore } from '../store/appStore'
 
 export function TaskSidebar(): React.JSX.Element {
@@ -6,6 +6,7 @@ export function TaskSidebar(): React.JSX.Element {
   const activeTaskId = useAppStore((s) => s.activeTaskId)
   const newTask = useAppStore((s) => s.newTask)
   const selectTask = useAppStore((s) => s.selectTask)
+  const deleteTask = useAppStore((s) => s.deleteTask)
 
   return (
     <aside
@@ -30,18 +31,30 @@ export function TaskSidebar(): React.JSX.Element {
         {tasks.map((task) => {
           const active = task.id === activeTaskId
           return (
-            <li key={task.id}>
+            <li key={task.id} className="group relative">
               <button
                 type="button"
                 onClick={() => selectTask(task.id)}
                 aria-current={active ? 'true' : undefined}
-                className={`mb-0.5 w-full rounded-md px-2.5 py-1.5 text-left transition-colors duration-100 ${
+                className={`mb-0.5 w-full rounded-md py-1.5 pr-8 pl-2.5 text-left transition-colors duration-100 ${
                   active
                     ? 'bg-[var(--color-hover)] text-[var(--color-text)]'
                     : 'text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]'
                 }`}
               >
                 <div className="truncate text-[13px]">{task.title}</div>
+              </button>
+              <button
+                type="button"
+                className="lp-icon-btn absolute top-0.5 right-0.5 !h-6 !w-6 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                aria-label={`Delete ${task.title}`}
+                title="Delete chat"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  deleteTask(task.id)
+                }}
+              >
+                <Trash size={12} aria-hidden />
               </button>
             </li>
           )

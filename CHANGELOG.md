@@ -2,6 +2,14 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.7.0] — 2026-09-21
+
+### Added
+
+- Default Ollama model: `gemma4:31b-cloud`
+- Cursor-style IDE UX: delete chat, image/file attachments, Plan mode, Keep/Undo file diffs, context/token meter
+- Ollama streams real token usage when available; otherwise ~estimate shown
+
 ## [0.6.0] — 2026-09-21
 
 ### Added

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { AgentPlan, PermissionRequest } from '@shared/agent'
 import type {
   AppSettings,
+  ChatImage,
   ChatMessage,
   PermissionMode,
   ProviderConfig,
@@ -11,6 +12,8 @@ import type {
 function newId(): string {
   return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
 }
+
+export type InteractionMode = 'chat' | 'agent' | 'plan'
 
 export interface TaskSummary {
   id: string
@@ -26,6 +29,42 @@ export interface TimelineEntry {
   ok?: boolean
 }
 
+export interface PendingAttachment {
+  id: string
+  name: string
+  kind: 'image' | 'file'
+  mimeType: string
+  /** base64 for images; text preview/path for files */
+  data?: string
+  textContent?: string
+  size: number
+}
+
+export interface PendingFileChange {
+  id: string
+  path: string
+  relativePath: string
+  before: string
+  after: string
+  kind: 'write' | 'edit'
+}
+
+export interface TokenUsage {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  contextLimit: number
+  estimated: boolean
+}
+
+interface TaskSession {
+  messages: ChatMessage[]
+  plan: AgentPlan | null
+  timeline: TimelineEntry[]
+  pendingChanges: PendingFileChange[]
+  usage: TokenUsage | null
+}
+
 interface AppState {
   ready: boolean
   version: string
@@ -33,6 +72,7 @@ interface AppState {
   providers: ProviderConfig[]
   tasks: TaskSummary[]
   activeTaskId: string | null
+  sessions: Record<string, TaskSession>
   messages: ChatMessage[]
   streamingText: string
   isStreaming: boolean
@@ -40,14 +80,17 @@ interface AppState {
   error: string | null
   view: 'chat' | 'settings'
   testResult: TestConnectionResult | null
-  interactionMode: 'chat' | 'agent'
+  interactionMode: InteractionMode
   plan: AgentPlan | null
   timeline: TimelineEntry[]
   pendingPermission: (PermissionRequest & { agentRequestId: string }) | null
   askDraft: string
+  attachments: PendingAttachment[]
+  pendingChanges: PendingFileChange[]
+  usage: TokenUsage | null
   init: () => Promise<void>
   setView: (view: 'chat' | 'settings') => void
-  setInteractionMode: (mode: 'chat' | 'agent') => void
+  setInteractionMode: (mode: InteractionMode) => void
   setPermissionMode: (mode: PermissionMode) => Promise<void>
   setActiveProvider: (id: string) => Promise<void>
   refreshProviders: () => Promise<void>
@@ -58,11 +101,52 @@ interface AppState {
   testProvider: (id: string) => Promise<void>
   newTask: () => void
   selectTask: (id: string) => void
+  deleteTask: (id: string) => void
+  addAttachment: (att: Omit<PendingAttachment, 'id'>) => void
+  removeAttachment: (id: string) => void
+  clearAttachments: () => void
+  acceptChange: (id: string) => void
+  rejectChange: (id: string) => Promise<void>
+  acceptAllChanges: () => void
+  rejectAllChanges: () => Promise<void>
   sendMessage: (text: string) => Promise<void>
   stopStreaming: () => Promise<void>
   respondPermission: (allow: boolean) => Promise<void>
   respondAsk: (answer: string) => Promise<void>
   setAskDraft: (v: string) => void
+}
+
+const emptySession = (): TaskSession => ({
+  messages: [],
+  plan: null,
+  timeline: [],
+  pendingChanges: [],
+  usage: null
+})
+
+function contextLimitForModel(model: string): number {
+  const m = model.toLowerCase()
+  if (m.includes('gemma')) return 128_000
+  if (m.includes('gpt-4o') || m.includes('claude')) return 128_000
+  if (m.includes('32k')) return 32_000
+  return 128_000
+}
+
+function persistActive(get: () => AppState, set: Set): void {
+  const s = get()
+  if (!s.activeTaskId) return
+  set({
+    sessions: {
+      ...s.sessions,
+      [s.activeTaskId]: {
+        messages: s.messages,
+        plan: s.plan,
+        timeline: s.timeline,
+        pendingChanges: s.pendingChanges,
+        usage: s.usage
+      }
+    }
+  })
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -72,6 +156,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   providers: [],
   tasks: [{ id: 'welcome', title: 'Welcome', updatedAt: Date.now() }],
   activeTaskId: 'welcome',
+  sessions: { welcome: emptySession() },
   messages: [],
   streamingText: '',
   isStreaming: false,
@@ -84,6 +169,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   timeline: [],
   pendingPermission: null,
   askDraft: '',
+  attachments: [],
+  pendingChanges: [],
+  usage: null,
 
   init: async () => {
     const [version, settings, providers] = await Promise.all([
@@ -131,29 +219,122 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   newTask: () => {
+    persistActive(get, set)
     const id = newId()
     set((s) => ({
-      tasks: [{ id, title: 'New task', updatedAt: Date.now() }, ...s.tasks],
+      tasks: [{ id, title: 'New chat', updatedAt: Date.now() }, ...s.tasks],
       activeTaskId: id,
+      sessions: { ...s.sessions, [id]: emptySession() },
       messages: [],
       streamingText: '',
       error: null,
       plan: null,
       timeline: [],
       pendingPermission: null,
+      pendingChanges: [],
+      usage: null,
+      attachments: [],
       view: 'chat'
     }))
   },
 
-  selectTask: (id) => set({ activeTaskId: id, view: 'chat' }),
+  selectTask: (id) => {
+    persistActive(get, set)
+    const session = get().sessions[id] ?? emptySession()
+    set({
+      activeTaskId: id,
+      messages: session.messages,
+      plan: session.plan,
+      timeline: session.timeline,
+      pendingChanges: session.pendingChanges,
+      usage: session.usage,
+      streamingText: '',
+      error: null,
+      view: 'chat'
+    })
+  },
+
+  deleteTask: (id) => {
+    const s = get()
+    const remaining = s.tasks.filter((t) => t.id !== id)
+    const { [id]: _removed, ...sessions } = s.sessions
+    void _removed
+    if (remaining.length === 0) {
+      const nid = newId()
+      set({
+        tasks: [{ id: nid, title: 'New chat', updatedAt: Date.now() }],
+        activeTaskId: nid,
+        sessions: { [nid]: emptySession() },
+        messages: [],
+        plan: null,
+        timeline: [],
+        pendingChanges: [],
+        usage: null,
+        streamingText: '',
+        error: null
+      })
+      return
+    }
+    const nextId = s.activeTaskId === id ? remaining[0].id : s.activeTaskId
+    const session = sessions[nextId!] ?? emptySession()
+    set({
+      tasks: remaining,
+      sessions,
+      activeTaskId: nextId,
+      messages: session.messages,
+      plan: session.plan,
+      timeline: session.timeline,
+      pendingChanges: session.pendingChanges,
+      usage: session.usage
+    })
+  },
+
+  addAttachment: (att) =>
+    set((s) => ({
+      attachments: [...s.attachments, { ...att, id: newId() }].slice(0, 8)
+    })),
+  removeAttachment: (id) =>
+    set((s) => ({ attachments: s.attachments.filter((a) => a.id !== id) })),
+  clearAttachments: () => set({ attachments: [] }),
+
+  acceptChange: (id) => {
+    set((s) => ({ pendingChanges: s.pendingChanges.filter((c) => c.id !== id) }))
+    persistActive(get, set)
+  },
+
+  rejectChange: async (id) => {
+    const change = get().pendingChanges.find((c) => c.id === id)
+    if (!change) return
+    const result = await window.localpilot.restoreFile(change.path, change.before)
+    if (!result.ok) {
+      set({ error: result.error ?? 'Failed to restore file' })
+      return
+    }
+    set((s) => ({ pendingChanges: s.pendingChanges.filter((c) => c.id !== id) }))
+    persistActive(get, set)
+  },
+
+  acceptAllChanges: () => {
+    set({ pendingChanges: [] })
+    persistActive(get, set)
+  },
+
+  rejectAllChanges: async () => {
+    const changes = [...get().pendingChanges].reverse()
+    for (const c of changes) {
+      await window.localpilot.restoreFile(c.path, c.before)
+    }
+    set({ pendingChanges: [] })
+    persistActive(get, set)
+  },
 
   stopStreaming: async () => {
     const { activeRequestId, interactionMode } = get()
     if (activeRequestId) {
-      if (interactionMode === 'agent') {
-        await window.localpilot.abortAgent(activeRequestId)
-      } else {
+      if (interactionMode === 'chat') {
         await window.localpilot.abortChat(activeRequestId)
+      } else {
+        await window.localpilot.abortAgent(activeRequestId)
       }
     }
     set((s) => {
@@ -177,6 +358,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             : s.messages
       }
     })
+    persistActive(get, set)
   },
 
   respondPermission: async (allow) => {
@@ -191,17 +373,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   respondAsk: async (answer) => {
-    const pending = get().pendingPermission
     const requestId = get().activeRequestId
     if (!requestId || !answer.trim()) return
     await window.localpilot.respondAsk({ requestId, answer: answer.trim() })
     set({ pendingPermission: null, askDraft: '' })
-    void pending
   },
 
   sendMessage: async (text) => {
     const trimmed = text.trim()
-    if (!trimmed || get().isStreaming) return
+    const attachments = get().attachments
+    if ((!trimmed && attachments.length === 0) || get().isStreaming) return
 
     const { settings, providers, interactionMode } = get()
     const providerId = settings?.activeProviderId ?? providers[0]?.id
@@ -210,24 +391,47 @@ export const useAppStore = create<AppState>((set, get) => ({
       return
     }
 
-    if (interactionMode === 'agent' && !settings?.workspacePath) {
+    const provider = providers.find((p) => p.id === providerId)
+    const limit = contextLimitForModel(provider?.model ?? '')
+
+    if (interactionMode !== 'chat' && !settings?.workspacePath) {
       set({
         error: 'Set a workspace path in Settings before running the agent (file/shell sandbox).'
       })
     }
 
+    const images: ChatImage[] = attachments
+      .filter((a) => a.kind === 'image' && a.data)
+      .map((a) => ({ mimeType: a.mimeType, data: a.data! }))
+
+    const fileNotes = attachments
+      .filter((a) => a.kind === 'file')
+      .map((a) =>
+        a.textContent
+          ? `[Attached file: ${a.name}]\n\`\`\`\n${a.textContent.slice(0, 40_000)}\n\`\`\``
+          : `[Attached file: ${a.name}]`
+      )
+      .join('\n\n')
+
+    const content = [trimmed, fileNotes].filter(Boolean).join('\n\n')
+
     const userMsg: ChatMessage = {
       id: newId(),
       role: 'user',
-      content: trimmed,
+      content: content || '(attachment)',
+      images: images.length ? images : undefined,
       createdAt: Date.now()
     }
+
+    const estPrompt = Math.ceil(
+      (get().messages.reduce((n, m) => n + m.content.length, 0) + content.length) / 4
+    )
 
     set((s) => ({
       messages: [...s.messages, userMsg],
       tasks: s.tasks.map((t) =>
         t.id === s.activeTaskId
-          ? { ...t, title: trimmed.slice(0, 48) || t.title, updatedAt: Date.now() }
+          ? { ...t, title: (trimmed || attachments[0]?.name || t.title).slice(0, 48), updatedAt: Date.now() }
           : t
       ),
       isStreaming: true,
@@ -235,27 +439,57 @@ export const useAppStore = create<AppState>((set, get) => ({
       error: null,
       plan: null,
       timeline: [],
-      pendingPermission: null
+      pendingPermission: null,
+      attachments: [],
+      usage: {
+        promptTokens: estPrompt,
+        completionTokens: 0,
+        totalTokens: estPrompt,
+        contextLimit: limit,
+        estimated: true
+      }
     }))
 
-    if (interactionMode === 'agent') {
-      await runAgentGoal(trimmed, providerId, set, get)
+    if (interactionMode === 'chat') {
+      await runChat(providerId, set, get)
     } else {
-      await runChat(trimmed, providerId, set, get)
+      await runAgentGoal(content || trimmed, providerId, interactionMode, set, get)
     }
+    persistActive(get, set)
   }
 }))
 
 type Set = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void
 type Get = () => AppState
 
-async function runChat(
-  _text: string,
-  providerId: string,
+function applyUsage(
   set: Set,
-  get: Get
-): Promise<void> {
-  const history = get().messages.map((m) => ({ role: m.role, content: m.content }))
+  get: Get,
+  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number },
+  estimated = false
+): void {
+  const provider = get().providers.find((p) => p.id === get().settings?.activeProviderId)
+  const limit = contextLimitForModel(provider?.model ?? '')
+  const prompt = usage.promptTokens ?? get().usage?.promptTokens ?? 0
+  const completion = usage.completionTokens ?? get().usage?.completionTokens ?? 0
+  const total = usage.totalTokens ?? prompt + completion
+  set({
+    usage: {
+      promptTokens: prompt,
+      completionTokens: completion,
+      totalTokens: total,
+      contextLimit: limit,
+      estimated
+    }
+  })
+}
+
+async function runChat(providerId: string, set: Set, get: Get): Promise<void> {
+  const history = get().messages.map((m) => ({
+    role: m.role,
+    content: m.content,
+    images: m.images
+  }))
   let unsubscribe: (() => void) | undefined
   try {
     const { requestId } = await window.localpilot.startChat({
@@ -270,27 +504,44 @@ async function runChat(
         const { chunk } = event
         if (chunk.type === 'text') {
           set((s) => ({ streamingText: s.streamingText + chunk.text }))
+        } else if (chunk.type === 'usage') {
+          applyUsage(set, get, chunk, false)
         } else if (chunk.type === 'error') {
           set({ error: chunk.message, isStreaming: false, activeRequestId: null })
           resolve()
         } else if (chunk.type === 'done') {
-          set((s) => ({
-            messages:
-              s.streamingText.length > 0
-                ? [
-                    ...s.messages,
-                    {
-                      id: newId(),
-                      role: 'assistant',
-                      content: s.streamingText,
-                      createdAt: Date.now()
-                    }
-                  ]
-                : s.messages,
-            streamingText: '',
-            isStreaming: false,
-            activeRequestId: null
-          }))
+          set((s) => {
+            const completion = Math.ceil(s.streamingText.length / 4)
+            const prompt = s.usage?.promptTokens ?? 0
+            return {
+              messages:
+                s.streamingText.length > 0
+                  ? [
+                      ...s.messages,
+                      {
+                        id: newId(),
+                        role: 'assistant',
+                        content: s.streamingText,
+                        createdAt: Date.now()
+                      }
+                    ]
+                  : s.messages,
+              streamingText: '',
+              isStreaming: false,
+              activeRequestId: null,
+              usage: s.usage
+                ? {
+                    ...s.usage,
+                    completionTokens: s.usage.estimated
+                      ? completion
+                      : s.usage.completionTokens || completion,
+                    totalTokens: s.usage.estimated
+                      ? prompt + completion
+                      : s.usage.totalTokens || prompt + completion
+                  }
+                : s.usage
+            }
+          })
           resolve()
         }
       })
@@ -306,13 +557,20 @@ async function runChat(
   }
 }
 
-async function runAgentGoal(goal: string, providerId: string, set: Set, _get: Get): Promise<void> {
+async function runAgentGoal(
+  goal: string,
+  providerId: string,
+  mode: InteractionMode,
+  set: Set,
+  get: Get
+): Promise<void> {
   let unsubscribe: (() => void) | undefined
   try {
     const { requestId } = await window.localpilot.startAgent({
       providerId,
       goal,
-      maxSteps: 20
+      mode: mode === 'plan' ? 'plan' : 'agent',
+      maxSteps: mode === 'plan' ? 8 : 20
     })
     set({ activeRequestId: requestId })
 
@@ -357,6 +615,28 @@ async function runAgentGoal(goal: string, providerId: string, set: Set, _get: Ge
           set((s) => ({
             timeline: [...s.timeline, entry].slice(-80)
           }))
+          const meta = event.result.meta
+          if (
+            event.result.ok &&
+            meta &&
+            typeof meta.path === 'string' &&
+            typeof meta.before === 'string' &&
+            typeof meta.after === 'string'
+          ) {
+            const change: PendingFileChange = {
+              id: newId(),
+              path: meta.path,
+              relativePath: String(meta.relativePath ?? meta.path),
+              before: meta.before,
+              after: meta.after,
+              kind: meta.kind === 'edit' ? 'edit' : 'write'
+            }
+            set((s) => ({
+              pendingChanges: [...s.pendingChanges.filter((c) => c.path !== change.path), change]
+            }))
+          }
+        } else if (event.type === 'usage') {
+          applyUsage(set, get, event, event.promptTokens == null)
         } else if (event.type === 'permission_required') {
           set({
             pendingPermission: { ...event.permission, agentRequestId: requestId }
