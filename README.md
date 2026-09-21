@@ -24,6 +24,7 @@ LocalPilot is an Electron desktop app that pairs a chat UI with an agent loop. Y
 - **Open Folder workspace** — Agent/Plan file and shell tools are sandboxed to the selected project
 - **Multi-agent** — parallel agents across chats; per-chat stop and stop-all; kill switch aborts every run
 - **Providers** — Ollama (local/cloud tags) and OpenAI-compatible endpoints; API keys via Electron `safeStorage`
+- **Run what it builds** — background dev servers (`proc_start` / `proc_logs` / `proc_stop`) with the detected `localhost` URL rendered in the App preview tab
 - **Browser** — Playwright with a persistent profile (or attach via `LOCALPILOT_CDP_URL`)
 - **Screen** — desktop control + live preview; vision coordinate grounding for VL models
 - **Media** — ffmpeg + sharp tools scoped to the workspace
@@ -91,9 +92,9 @@ Built-in defaults ship as **Gemma 4 (cloud)** and **Kimi K3 (cloud)** on Ollama�
 ```
 src/main/agent/       Agent loop, planner, memory
 src/main/providers/   Ollama, OpenAI-compatible (Anthropic/Gemini via gateway)
-src/main/tools/       fs, shell, code, browser, screen, media, MCP, memory
+src/main/tools/       fs, shell, background processes, code, browser, screen, media, MCP, memory
 src/main/safety/      Permissions, kill switch, audit log
-src/renderer/         Chat UI, settings, diff review, screen preview
+src/renderer/         Chat UI, settings, diff review, app/screen preview
 src/shared/           Zod schemas, IPC contracts
 design-system/        UI tokens
 ```

@@ -11,6 +11,7 @@ export function classifyToolRisk(tool: RegisteredTool, args: Record<string, unkn
     }
     return 'risky'
   }
+  if (tool.name === 'proc_start') return 'risky'
   if (tool.name === 'fs_delete') return 'critical'
   return tool.risk
 }

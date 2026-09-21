@@ -99,6 +99,9 @@ interface AppState {
   attachments: PendingAttachment[]
   pendingChanges: PendingFileChange[]
   usage: TokenUsage | null
+  /** Dev server URL detected from a background process, shown in the preview pane */
+  previewUrl: string | null
+  setPreviewUrl: (url: string | null) => void
   init: () => Promise<void>
   setView: (view: 'chat' | 'settings') => void
   setInteractionMode: (mode: InteractionMode) => void
@@ -352,6 +355,9 @@ function bindGlobalListeners(get: Get, set: Set): void {
         at: Date.now(),
         ok: event.result.ok
       }
+      if (event.result.ok && typeof event.result.meta?.previewUrl === 'string') {
+        set({ previewUrl: event.result.meta.previewUrl })
+      }
       patchTask(set, taskId, (prev) => {
         let pendingChanges = prev.pendingChanges
         const meta = event.result.meta
@@ -466,6 +472,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   attachments: [],
   pendingChanges: [],
   usage: null,
+  previewUrl: null,
+
+  setPreviewUrl: (previewUrl) => set({ previewUrl }),
 
   init: async () => {
     const [version, settings, providers] = await Promise.all([

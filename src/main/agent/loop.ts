@@ -44,9 +44,19 @@ const MODEL_TURN_TIMEOUT_MS = 120_000
 /** Abort if the stream goes silent this long between chunks. */
 const MODEL_IDLE_TIMEOUT_MS = 75_000
 
+/** Quality bar for greenfield app builds — bad scaffolds are the usual failure mode. */
+const BUILD_GUIDE = [
+  'BUILD RULES (greenfield app):',
+  '1. Scaffold with real tooling instead of hand-writing configs: `npm create vite@latest . -- --template react` (add `-y`/non-interactive flags), then `npm install` via shell_run.',
+  '2. Never invent dependency versions or config that does not match what is installed. Tailwind v4 uses the `@tailwindcss/vite` plugin plus `@import "tailwindcss";` in the CSS and needs no tailwind.config.js; Tailwind v3 uses postcss with `@tailwind base/components/utilities`. Check the installed version before writing config.',
+  '3. Do not reference remote images, icon CDNs, or fonts that may not resolve. Use CSS gradients, inline SVG, or emoji so the page never renders broken placeholders.',
+  '4. Write real content and layout — spacing, type scale, responsive grid, hover states — not a bare unstyled document.',
+  '5. Run it: `npm install` with shell_run, then `proc_start` with the dev command (for example `npm run dev`). Report the localhost URL.',
+  '6. Verify before finishing: call proc_logs and fix any compile or import error, then re-check. Finish only when the dev server compiles cleanly.'
+].join('\n')
+
 export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopResult> {
   const workspacePath = opts.workspacePath.trim()
-  const maxSteps = opts.maxSteps ?? 20
   const mode = opts.mode ?? 'agent'
   const plan = buildPlan(opts.goal)
   opts.onEvent({ type: 'plan', plan })
@@ -69,6 +79,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
     mode === 'plan' ? allTools.filter((t) => readOnlyNames.has(t.name)) : allTools
 
   const createGoal = isCreateBuildGoal(opts.goal)
+  const maxSteps = opts.maxSteps ?? (mode === 'agent' && createGoal ? 32 : 20)
   const modeHint =
     mode === 'plan'
       ? [
@@ -82,11 +93,15 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
         ]
           .filter(Boolean)
           .join(' ')
-      : `When the goal is complete, respond with a short final summary and do not call more tools.${
+      : [
+          'When the goal is complete, respond with a short final summary and do not call more tools.',
           createGoal
-            ? ' For create/build goals in an empty workspace, use fs_write (and related tools) to scaffold files — do not keep listing an empty directory.'
-            : ''
-        }`
+            ? 'For create/build goals in an empty workspace, scaffold files directly — do not keep listing an empty directory.'
+            : '',
+          createGoal ? `\n\n${BUILD_GUIDE}` : ''
+        ]
+          .filter(Boolean)
+          .join(' ')
 
   const messages: ProviderChatMessage[] = [
     {
@@ -243,8 +258,17 @@ ${modeHint}`
       // Nudge so cloud models don't hang silently after writing a file.
       messages.push({
         role: 'user',
-        content:
-          'File change applied. Continue with the next concrete step (another write/edit/shell) or finish with a short summary. Do not stall.'
+        content: createGoal
+          ? 'File change applied. Continue: finish the remaining files, then install dependencies with shell_run and start the app with proc_start before summarising. Do not stall.'
+          : 'File change applied. Continue with the next concrete step (another write/edit/shell) or finish with a short summary. Do not stall.'
+      })
+    } else if (result.ok && call.name === 'proc_start') {
+      const url = typeof result.meta?.previewUrl === 'string' ? result.meta.previewUrl : null
+      messages.push({
+        role: 'user',
+        content: url
+          ? `The app is running at ${url}. Call proc_logs once to confirm it compiled without errors, fix anything broken, then finish with a short summary that includes the URL.`
+          : 'The process started but no URL was detected. Call proc_logs to check for errors and fix them, or finish with a short summary.'
       })
     }
   }

@@ -1,12 +1,16 @@
-import { Browser, ListBullets } from '@phosphor-icons/react'
+import { ArrowClockwise, ArrowSquareOut, Browser, ListBullets, Monitor } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../store/appStore'
+
+type Tab = 'app' | 'screen' | 'log'
 
 export function LivePreviewPane(): React.JSX.Element {
   const timeline = useAppStore((s) => s.timeline)
   const isStreaming = useAppStore((s) => s.isStreaming)
   const settings = useAppStore((s) => s.settings)
-  const [tab, setTab] = useState<'screen' | 'log'>('screen')
+  const previewUrl = useAppStore((s) => s.previewUrl)
+  const [tab, setTab] = useState<Tab>('screen')
+  const [frameKey, setFrameKey] = useState(0)
   const [preview, setPreview] = useState<{ dataUrl: string; width: number; height: number } | null>(
     null
   )
@@ -16,7 +20,13 @@ export function LivePreviewPane(): React.JSX.Element {
     ? workspace.replace(/\\/g, '/').split('/').filter(Boolean).pop()
     : null
 
+  // Jump to the app as soon as a dev server URL shows up.
   useEffect(() => {
+    if (previewUrl) setTab('app')
+  }, [previewUrl])
+
+  useEffect(() => {
+    if (tab !== 'screen') return
     let cancelled = false
     const tick = async (): Promise<void> => {
       try {
@@ -40,17 +50,28 @@ export function LivePreviewPane(): React.JSX.Element {
       cancelled = true
       window.clearInterval(id)
     }
-  }, [isStreaming])
+  }, [isStreaming, tab])
 
   return (
     <aside className="lp-context-pane" aria-label="Context">
       <div className="lp-context-tabs">
         <button
           type="button"
+          className={tab === 'app' ? 'lp-context-tab is-active' : 'lp-context-tab'}
+          onClick={() => setTab('app')}
+        >
+          <Browser size={12} aria-hidden />
+          App
+          {previewUrl ? (
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-ok)]" aria-hidden />
+          ) : null}
+        </button>
+        <button
+          type="button"
           className={tab === 'screen' ? 'lp-context-tab is-active' : 'lp-context-tab'}
           onClick={() => setTab('screen')}
         >
-          <Browser size={12} aria-hidden />
+          <Monitor size={12} aria-hidden />
           Screen
         </button>
         <button
@@ -63,13 +84,60 @@ export function LivePreviewPane(): React.JSX.Element {
         </button>
         <div className="flex-1" />
         {folderName ? (
-          <span className="max-w-[100px] truncate font-[var(--font-mono)] text-[10px] text-[var(--color-text-faint)]" title={workspace}>
+          <span
+            className="max-w-[80px] truncate font-[var(--font-mono)] text-[10px] text-[var(--color-text-faint)]"
+            title={workspace}
+          >
             {folderName}
           </span>
         ) : null}
       </div>
 
-      {tab === 'screen' ? (
+      {tab === 'app' ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          {previewUrl ? (
+            <>
+              <div className="flex items-center gap-1 border-b border-[var(--color-border)] px-2 py-1.5">
+                <span
+                  className="min-w-0 flex-1 truncate font-[var(--font-mono)] text-[10px] text-[var(--color-text-muted)]"
+                  title={previewUrl}
+                >
+                  {previewUrl}
+                </span>
+                <button
+                  type="button"
+                  className="lp-icon-btn !h-6 !w-6"
+                  title="Reload preview"
+                  aria-label="Reload preview"
+                  onClick={() => setFrameKey((k) => k + 1)}
+                >
+                  <ArrowClockwise size={12} aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  className="lp-icon-btn !h-6 !w-6"
+                  title="Open in browser"
+                  aria-label="Open in browser"
+                  onClick={() => void window.localpilot.openExternal(previewUrl)}
+                >
+                  <ArrowSquareOut size={12} aria-hidden />
+                </button>
+              </div>
+              <iframe
+                key={frameKey}
+                src={previewUrl}
+                title="App preview"
+                className="min-h-0 flex-1 border-0 bg-white"
+              />
+            </>
+          ) : (
+            <div className="flex flex-1 items-center justify-center px-4 text-center text-[11px] leading-relaxed text-[var(--color-text-faint)]">
+              Ask the agent to run the app. A dev server started with a background process appears
+              here.
+            </div>
+          )}
+        </div>
+      ) : tab === 'screen' ? (
         <div className="flex min-h-0 flex-1 flex-col p-2.5">
           <div className="relative min-h-0 flex-1 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]">
             {preview ? (

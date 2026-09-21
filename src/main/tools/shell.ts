@@ -24,6 +24,27 @@ export function isDeniedCommand(command: string): boolean {
   return DENY_PATTERNS.some((re) => re.test(command))
 }
 
+/**
+ * Spawn a shell command. On Windows, verbatim arguments are required or Node
+ * re-quotes the string and breaks commands containing quotes.
+ */
+export function spawnShell(
+  command: string,
+  options: { cwd: string; env?: NodeJS.ProcessEnv }
+): ReturnType<typeof spawn> {
+  const isWin = process.platform === 'win32'
+  return spawn(
+    isWin ? 'cmd.exe' : 'bash',
+    isWin ? ['/d', '/s', '/c', command] : ['-lc', command],
+    {
+      cwd: options.cwd,
+      env: options.env ?? process.env,
+      windowsHide: true,
+      ...(isWin ? { windowsVerbatimArguments: true } : {})
+    }
+  )
+}
+
 export const shellTools: RegisteredTool[] = [
   {
     name: 'shell_run',
@@ -86,12 +107,7 @@ function runCommand(
   signal?: AbortSignal
 ): Promise<{ text: string; code: number | null }> {
   return new Promise((resolvePromise, reject) => {
-    const isWin = process.platform === 'win32'
-    const child = spawn(isWin ? 'cmd.exe' : 'bash', isWin ? ['/c', command] : ['-lc', command], {
-      cwd,
-      env: process.env,
-      windowsHide: true
-    })
+    const child = spawnShell(command, { cwd })
 
     let stdout = ''
     let stderr = ''
@@ -108,10 +124,10 @@ function runCommand(
       reject(new Error(`Command timed out after ${timeoutMs}ms`))
     }, timeoutMs)
 
-    child.stdout.on('data', (chunk: Buffer) => {
+    child.stdout?.on('data', (chunk: Buffer) => {
       if (stdout.length < max) stdout += chunk.toString('utf8')
     })
-    child.stderr.on('data', (chunk: Buffer) => {
+    child.stderr?.on('data', (chunk: Buffer) => {
       if (stderr.length < max) stderr += chunk.toString('utf8')
     })
     child.on('error', (err) => {

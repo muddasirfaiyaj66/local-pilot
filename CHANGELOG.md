@@ -2,6 +2,22 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.10.0] — 2026-09-21
+
+### Added
+
+- **Run the app you build:** `proc_start`, `proc_logs`, and `proc_stop` tools keep dev servers alive in the background, detect the `http://localhost` URL, and stream startup output
+- **App preview tab** in the context pane renders the running dev server, with reload and open-in-browser
+
+### Changed
+
+- Build goals follow a quality bar: scaffold with real tooling, match config to installed versions, avoid remote assets that render as broken placeholders, then install, run, and verify the dev server before finishing
+- Create/build runs get a higher step budget so scaffold → install → run → fix fits in one turn
+
+### Fixed
+
+- Shell commands containing quotes no longer get mangled on Windows (verbatim arguments), which broke scaffolding commands
+
 ## [0.9.0] — 2026-09-21
 
 ### Added

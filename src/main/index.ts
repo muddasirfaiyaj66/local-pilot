@@ -89,6 +89,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   abortAllStreams()
   unregisterKillSwitch()
+  void import('./tools/process').then(({ stopAllProcesses }) => stopAllProcesses())
   if (process.platform !== 'darwin') {
     app.quit()
   }
@@ -97,6 +98,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   abortAllStreams()
   unregisterKillSwitch()
+  void import('./tools/process').then(({ stopAllProcesses }) => stopAllProcesses())
   void import('./tools/browserSession').then(({ browserSession }) => browserSession.close())
   void import('./tools/mcp').then(({ closeMcpConnections }) => closeMcpConnections())
 })

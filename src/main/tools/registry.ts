@@ -6,6 +6,7 @@ import { fsTools } from './fs'
 import { mcpMetaTools } from './mcp'
 import { mediaTools } from './media'
 import { memoryTools } from './memoryTools'
+import { processTools } from './process'
 import { screenTools } from './screen'
 import { shellTools } from './shell'
 import { toToolDefinition, type RegisteredTool } from './types'
@@ -15,6 +16,7 @@ let dynamicTools: RegisteredTool[] = []
 const STATIC: RegisteredTool[] = [
   ...fsTools,
   ...shellTools,
+  ...processTools,
   ...codeTools,
   ...browserTools,
   ...screenTools,
