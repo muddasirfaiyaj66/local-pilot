@@ -17,3 +17,4 @@ coverage
 .localpilot-audit.jsonl
 .localpilot-browser-profile
 .localpilot-memory/
+.localpilot-userdata/
