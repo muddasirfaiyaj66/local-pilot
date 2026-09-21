@@ -17,9 +17,7 @@ npm test
 npm run build
 ```
 
-## Phase discipline
-
-Work **one phase at a time** (see README roadmap). Prefer finishing and demonstrating the current phase over jumping ahead.
+## Code map
 
 | Area | Location |
 |------|----------|
@@ -33,7 +31,7 @@ Work **one phase at a time** (see README roadmap). Prefer finishing and demonstr
 
 ## UI
 
-Follow `design-system/localpilot/MASTER.md` (Cursor-type dark IDE). Use Phosphor icons — no emoji-as-icons. Keep TypeScript strict; avoid `any`.
+Follow `design-system/localpilot/MASTER.md`. Use Phosphor icons — no emoji-as-icons. Keep TypeScript strict; avoid `any`.
 
 ## Commits
 
@@ -41,6 +39,6 @@ Clear, imperative messages focused on **why** (e.g. `fix streaming abort leaving
 
 ## Pull requests
 
-- Describe the phase and what to test manually
+- Describe what changed and how to test it manually
 - Include screenshots for UI changes
 - Do not commit secrets, `.env`, or real API keys

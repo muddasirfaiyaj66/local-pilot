@@ -2,6 +2,14 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.8.2] — 2026-09-21
+
+### Changed
+
+- README rewritten as a product overview (removed phase roadmap / status diary)
+- CONTRIBUTING and SECURITY updated to match current project state
+- RELEASE docs tag example aligned with current version
+
 ## [0.8.1] — 2026-09-21
 
 ### Fixed

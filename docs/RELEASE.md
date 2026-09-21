@@ -20,7 +20,7 @@ npm run pack
 Packaged builds use `electron-updater` against this repo’s GitHub Releases (`electron-builder.yml` → `publish`).
 
 1. Bump `version` in `package.json`.
-2. Commit and tag: `git tag v0.6.0 && git push origin v0.6.0`
+2. Commit and tag: `git tag v0.8.2 && git push origin v0.8.2`
 3. Publish with a token that can create releases:
 
 ```bash

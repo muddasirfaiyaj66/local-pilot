@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-LocalPilot is early (Phase 1). Security fixes land on the default branch.
+Security fixes land on the default branch (`main`). Use the latest release when possible.
 
 ## Reporting a vulnerability
 
@@ -18,8 +18,8 @@ We aim to acknowledge reports within a few days.
 
 ## Scope notes
 
-LocalPilot is designed to control the desktop (browser, files, shell) in later phases. Treat:
+LocalPilot can control the desktop (browser, files, shell, screen). Treat as in-scope:
 
-- Permission prompts and the kill switch as critical UX
-- Prompt injection from page/file/screenshot content as in-scope
-- API key storage (`safeStorage`) and log redaction as in-scope
+- Permission prompts and the kill switch
+- Prompt injection from page, file, or screenshot content
+- API key storage (`safeStorage`) and log redaction

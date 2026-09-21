@@ -5,47 +5,40 @@
 </p>
 
 <p align="center">
-  <strong>Cross-platform desktop AI agent</strong> that controls your computer from a natural-language goal — browser, apps, files, and terminal.
+  <strong>Cross-platform desktop AI agent</strong> that acts on your computer from a natural-language goal — browser, screen, files, shell, and more.
 </p>
 
 <p align="center">
-  Local models (Ollama, LM Studio, llama.cpp) · Cloud APIs (OpenAI-compatible & more) · Electron
+  Local models via Ollama · Cloud APIs (OpenAI-compatible &amp; more) · Electron
 </p>
 
 ---
 
-## Status
+## What it is
 
-**Phase 6 complete** — packaging, 3-OS CI, GitHub Releases auto-update, release docs.
+LocalPilot is an Electron desktop app that pairs a chat UI with an agent loop. You open a project folder, pick a model, and work in **Chat**, **Plan**, or **Agent** mode. Tools run in the main process under a workspace sandbox, with permission prompts and a global kill switch.
 
-## Screenshots / brand
+## Features
 
-| Asset | Path |
-|-------|------|
-| App icon (PNG) | [`build/icon.png`](build/icon.png) |
-| Vector mark | [`src/renderer/src/assets/logo-mark.svg`](src/renderer/src/assets/logo-mark.svg) |
-| Full mark | [`src/renderer/src/assets/logo.svg`](src/renderer/src/assets/logo.svg) |
-
-**Logo:** Geometric **LP** monogram (LocalPilot) — flat blue `#3B82F6` on charcoal. No clipart pin/plane. Assets: `build/icon.png`, `src/renderer/src/assets/logo-mark.svg`.
-
-## Features (Phase 5)
-
-- Agent + Chat; workspace-sandboxed fs/shell/code tools
-- **Playwright** browser with persistent profile (or CDP via `LOCALPILOT_CDP_URL`)
-- Screen control + live preview; vision coordinate grounding
-- **Media:** ffmpeg + sharp tools under the workspace
-- **MCP:** configure servers in `mcp.json` (userData); `mcp_reload` refreshes tools
-- **Memory:** SQLite notes (`memory_*`) and task history
-- Permission modes + kill switch `Ctrl/Cmd+Shift+Esc`
-- Plan + action timeline
+- **Modes:** Chat (conversation), Plan (read-only inspect + proposed steps), Agent (tools that change the world)
+- **Open Folder workspace** — Agent/Plan file and shell tools are sandboxed to the selected project
+- **Multi-agent** — parallel agents across chats; per-chat stop and stop-all; kill switch aborts every run
+- **Providers** — Ollama (local/cloud tags) and OpenAI-compatible endpoints; API keys via Electron `safeStorage`
+- **Browser** — Playwright with a persistent profile (or attach via `LOCALPILOT_CDP_URL`)
+- **Screen** — desktop control + live preview; vision coordinate grounding for VL models
+- **Media** — ffmpeg + sharp tools scoped to the workspace
+- **MCP** — stdio servers from `mcp.json` in app userData; `mcp_reload` refreshes tools
+- **Memory** — SQLite notes (`memory_*`) and task history (`node:sqlite`)
+- **Diff review** — Keep / Undo for agent file changes; attachments; context/token meter
+- **Safety** — permission modes, Approve/Deny previews, audit log with secret redaction, kill switch `Ctrl/Cmd+Shift+Esc`
 
 ## Requirements
 
 - **Node.js 22+** (uses `node:sqlite` for memory)
-- Optional: [Ollama](https://ollama.com) for local models
-- Optional: API key for cloud / OpenRouter / etc.
+- Optional: [Ollama](https://ollama.com) for local / Ollama-served models
+- Optional: API key for OpenAI-compatible / OpenRouter / similar gateways
 
-## Quick start
+## Install & quick start
 
 ```bash
 git clone https://github.com/muddasirfaiyaj66/local-pilot.git
@@ -54,15 +47,21 @@ npm install
 npm run dev
 ```
 
-> If Electron’s install script was blocked by your npm policy, approve it once:  
-> `npm install-scripts approve electron` then `npm rebuild electron`.
+If Electron’s install script was blocked by your npm policy:
 
-### First chat
+```bash
+npm install-scripts approve electron
+npm rebuild electron
+```
+
+### First run
 
 1. Open **Settings** (gear in the activity rail).
-2. **Ollama:** base URL `http://127.0.0.1:11434`, model e.g. `llama3.2` → **Test connection**.  
-   Or set an **OpenAI-compatible** base URL + API key + model.
-3. Return to **Chat**, pick the model in the composer, send a message.
+2. Confirm or add a provider:
+   - **Ollama:** base URL `http://127.0.0.1:11434`, model e.g. `gemma4:31b-cloud` → **Test connection**
+   - **OpenAI-compatible:** base URL + API key + model
+3. Use **Open Folder** to set a workspace (required for Agent / Plan tools).
+4. Return to chat, choose **Chat**, **Plan**, or **Agent**, pick a model, and send a message.
 
 ## Scripts
 
@@ -73,53 +72,45 @@ npm run dev
 | `npm run typecheck` | Strict TypeScript |
 | `npm test` | Vitest |
 | `npm run pack` | Unpackaged electron-builder output |
-| `npm run dist` | Installers (nsis / dmg / AppImage+deb) |
+| `npm run dist` | Installers (nsis / dmg / AppImage + deb) |
 
 ## Model recommendations
 
 | Use case | Suggestion |
 |----------|------------|
-| Local, fast | `gemma4:31b-cloud` (default), `llama3.2`, `qwen2.5:7b` |
-| Local, stronger | `qwen2.5:14b` / larger if VRAM allows |
-| Cloud chat | `gpt-4o-mini`, Claude via OpenRouter (`…/api/v1`) |
-| Vision | `gemma4:31b-cloud`, `llava`, `qwen2.5-vl`, UI-TARS-class models |
+| Default (Ollama) | `gemma4:31b-cloud` |
+| Stronger chat (Ollama) | `kimi-k3:cloud` |
+| Local / smaller | `llama3.2`, `qwen2.5:7b` / `14b` as VRAM allows |
+| Cloud (OpenAI-compatible) | `gpt-4o-mini`, or Claude/Gemini via an OpenAI-compatible gateway |
+| Vision / grounding | `gemma4:31b-cloud`, `llava`, `qwen2.5-vl`, UI-TARS-class models |
+
+Built-in defaults ship as **Gemma 4 (cloud)** and **Kimi K3 (cloud)** on Ollama’s local API.
 
 ## Architecture
 
 ```
-src/main/agent/       loop, planner, memory          (Phase 2 / 5)
-src/main/providers/   ollama, openaiCompat, …        (Phase 1 ✅)
-src/main/tools/       browser, screen, shell, fs…    (Phases 2–5)
-src/main/safety/      permissions, killswitch, audit (Phase 2)
-src/renderer/         Cursor-style chat UI           (Phase 1 ✅)
+src/main/agent/       Agent loop, planner, memory
+src/main/providers/   Ollama, OpenAI-compatible (Anthropic/Gemini via gateway)
+src/main/tools/       fs, shell, code, browser, screen, media, MCP, memory
+src/main/safety/      Permissions, kill switch, audit log
+src/renderer/         Chat UI, settings, diff review, screen preview
 src/shared/           Zod schemas, IPC contracts
-design-system/        UI tokens (UI UX Pro Max)
+design-system/        UI tokens
 ```
 
-**Security model (target):** main process owns tools & secrets; renderer is isolated (`contextIsolation`, no `nodeIntegration`); preload exposes a typed IPC bridge only.
-
-## Roadmap
-
-| Phase | Focus | Status |
-|-------|--------|--------|
-| 1 | Scaffold, chat UI, providers, streaming | ✅ |
-| 2 | Agent loop, fs/shell/code, permissions, kill switch | ✅ |
-| 3 | Playwright browser (persistent profile), post approval | ✅ |
-| 4 | Screen control, vision grounding, live preview | ✅ |
-| 5 | Media (ffmpeg/sharp), MCP client, SQLite memory | ✅ |
-| 6 | Packaging, CI matrix, auto-update, docs polish | ✅ |
+**Security model:** the main process owns tools and secrets; the renderer is isolated (`contextIsolation`, no `nodeIntegration`); preload exposes a typed IPC bridge only.
 
 ## Safety
 
-- Permission modes: Ask always · Ask risky (default) · Autonomous
-- Risky actions (posts, deletes, shell outside workspace, MCP, media writes) require preview + Approve/Deny
-- Global kill switch: `Ctrl/Cmd+Shift+Esc`
-- Untrusted content defense: page/file/screenshot text is data, not instructions
-- Never send API keys/passwords to models; secrets redacted in logs
+- Permission modes: **Ask always** · **Ask risky** (default) · **Autonomous**
+- Risky / critical actions (posts, deletes, shell outside workspace, MCP, media writes) require preview + Approve / Deny
+- Global kill switch: `Ctrl/Cmd+Shift+Esc` (stops all agents)
+- Page, file, and screenshot text is treated as data, not instructions
+- API keys and passwords are not sent to models; secrets are redacted in logs
 
-## MCP config
+## MCP
 
-Copy [`mcp.example.json`](mcp.example.json) to the app userData folder as `mcp.json`:
+Copy [`mcp.example.json`](mcp.example.json) to the app **userData** folder as `mcp.json`:
 
 ```json
 {
@@ -133,18 +124,21 @@ Copy [`mcp.example.json`](mcp.example.json) to the app userData folder as `mcp.j
 }
 ```
 
-Then restart LocalPilot or ask the agent to run `mcp_reload`.
+Restart LocalPilot or ask the agent to run `mcp_reload`.
 
-## Known limitations
+## Packaging & releases
 
-- Anthropic / Gemini kinds use OpenAI-compatible gateways only
-- Chat history is in-memory for the session
-- Auto-update requires a published GitHub Release matching `package.json` version
-- Prefer DOM/browser tools over pixel clicking when possible
+See [docs/RELEASE.md](docs/RELEASE.md) for local installers, GitHub Releases, and auto-update.
 
-## Packaging
+## Brand assets
 
-See [docs/RELEASE.md](docs/RELEASE.md) for installers and publishing updates.
+| Asset | Path |
+|-------|------|
+| App icon (PNG) | [`build/icon.png`](build/icon.png) |
+| Vector mark | [`src/renderer/src/assets/logo-mark.svg`](src/renderer/src/assets/logo-mark.svg) |
+| Full mark | [`src/renderer/src/assets/logo.svg`](src/renderer/src/assets/logo.svg) |
+
+Geometric **LP** monogram — flat blue `#3B82F6` on charcoal.
 
 ## Contributing
 
@@ -152,7 +146,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Design tokens live under [`design-system
 
 ## Security
 
-Please report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
+Report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 
 ## License
 
