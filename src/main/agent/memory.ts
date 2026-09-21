@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { app } from 'electron'
 
 type DatabaseSync = import('node:sqlite').DatabaseSync
+type SqliteModule = typeof import('node:sqlite')
 
 export interface MemoryNote {
   id: number
@@ -15,6 +16,11 @@ export interface MemoryNote {
 let db: DatabaseSync | null = null
 
 function dbPath(): string {
+  // Vitest workers share os.tmpdir(); a single file DB races under Linux locking.
+  // In-memory keeps unit tests isolated and avoids native path/lock flakiness on CI.
+  if (process.env.VITEST) {
+    return ':memory:'
+  }
   try {
     const dir = join(app.getPath('userData'), 'memory')
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
@@ -26,14 +32,23 @@ function dbPath(): string {
   }
 }
 
-function loadDatabaseSync(): typeof import('node:sqlite').DatabaseSync {
+function loadSqliteModule(): SqliteModule {
+  const builtin =
+    typeof process.getBuiltinModule === 'function'
+      ? (process.getBuiltinModule('node:sqlite') as SqliteModule | undefined)
+      : undefined
+  if (builtin?.DatabaseSync) return builtin
+
+  const require = createRequire(import.meta.url)
+  return require('node:sqlite') as SqliteModule
+}
+
+function loadDatabaseSync(): SqliteModule['DatabaseSync'] {
   try {
-    const require = createRequire(import.meta.url)
-    const mod = require('node:sqlite') as typeof import('node:sqlite')
-    return mod.DatabaseSync
+    return loadSqliteModule().DatabaseSync
   } catch (err) {
     throw new Error(
-      `SQLite memory requires Node.js 22+ (node:sqlite). ${err instanceof Error ? err.message : String(err)}`
+      `SQLite memory requires Node.js 22.13+ (node:sqlite). ${err instanceof Error ? err.message : String(err)}`
     )
   }
 }

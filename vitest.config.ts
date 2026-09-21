@@ -4,7 +4,14 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts']
+    include: ['src/**/*.test.ts'],
+    // Node 22.5–22.12 need the flag; 22.13+ ignores it. Safe no-op on Node 24+.
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        execArgv: ['--experimental-sqlite']
+      }
+    }
   },
   resolve: {
     alias: {

@@ -1,10 +1,13 @@
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+/** Per-process path so parallel Vitest workers do not share SQLite/settings files. */
+const vitestUserData = join(tmpdir(), `localpilot-vitest-userdata-${process.pid}`)
+
 /** Minimal Electron stub for Vitest (main-process APIs used by tools). */
 export const app = {
   getPath: (name: string): string => {
-    if (name === 'userData') return join(tmpdir(), 'localpilot-vitest-userdata')
+    if (name === 'userData') return vitestUserData
     return tmpdir()
   },
   getVersion: (): string => '0.0.0-test',

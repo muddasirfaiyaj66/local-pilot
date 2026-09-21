@@ -17,7 +17,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          # 22.13+ exposes node:sqlite without a required flag (still experimental).
+          node-version: '22.13'
           cache: npm
       - run: npm ci
       - name: Install Linux Electron deps
@@ -27,6 +28,9 @@ jobs:
           sudo apt-get install -y libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 xdg-utils libatspi2.0-0 libuuid1 libsecret-1-0
       - run: npm run typecheck
       - run: npm test
+        env:
+          # Harmless on 22.13+; keeps older patch trains / local forks working.
+          NODE_OPTIONS: --experimental-sqlite
       - run: npm run build
 
   pack:
@@ -46,7 +50,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '22.13'
           cache: npm
       - run: npm ci
       - name: Install Linux Electron deps
