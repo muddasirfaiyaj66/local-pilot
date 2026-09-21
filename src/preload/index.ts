@@ -77,7 +77,8 @@ const api: LocalPilotApi = {
     ipcRenderer.invoke(IpcChannels.fsRestore, path, content) as Promise<{
       ok: boolean
       error?: string
-    }>
+    }>,
+  openFolder: () => ipcRenderer.invoke(IpcChannels.dialogOpenFolder) as Promise<string | null>
 }
 
 contextBridge.exposeInMainWorld('localpilot', api)

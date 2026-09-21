@@ -120,21 +120,45 @@ export class SettingsStore {
       return
     }
 
-    // Prefer cloud Gemma as the default Ollama model for new sessions
     let changed = false
-    for (const p of this.settings.providers) {
-      if (p.id === 'ollama-local' && p.kind === 'ollama') {
-        if (p.model === 'llama3.2' || p.model === 'llama3.2:latest') {
-          p.model = 'gemma4:31b-cloud'
-          p.visionEnabled = true
-          p.name = 'Ollama'
-          changed = true
+
+    // Migrate legacy ollama-local → gemma id + model
+    const legacy = this.settings.providers.find((p) => p.id === 'ollama-local')
+    if (legacy && legacy.kind === 'ollama') {
+      legacy.id = 'ollama-gemma'
+      legacy.name = 'Gemma 4 (cloud)'
+      if (
+        legacy.model === 'llama3.2' ||
+        legacy.model === 'llama3.2:latest' ||
+        !legacy.model.includes('gemma')
+      ) {
+        // only force model if still on old default
+        if (legacy.model === 'llama3.2' || legacy.model === 'llama3.2:latest') {
+          legacy.model = 'gemma4:31b-cloud'
         }
       }
+      legacy.visionEnabled = true
+      if (this.settings.activeProviderId === 'ollama-local') {
+        this.settings.activeProviderId = 'ollama-gemma'
+      }
+      changed = true
     }
+
+    const ensureProvider = (
+      id: string,
+      config: (typeof DEFAULT_PROVIDERS)[number]
+    ): void => {
+      if (!this.settings.providers.some((p) => p.id === id || p.model === config.model)) {
+        this.settings.providers.push({ ...config, hasApiKey: false })
+        changed = true
+      }
+    }
+    ensureProvider('ollama-gemma', DEFAULT_PROVIDERS[0]!)
+    ensureProvider('ollama-kimi', DEFAULT_PROVIDERS[1]!)
+
     if (!this.settings.activeProviderId) {
       this.settings.activeProviderId =
-        this.settings.providers.find((p) => p.id === 'ollama-local')?.id ??
+        this.settings.providers.find((p) => p.id === 'ollama-gemma')?.id ??
         this.settings.providers[0]?.id ??
         null
       changed = true

@@ -17,14 +17,12 @@ export function SettingsPage(): React.JSX.Element {
   const testProvider = useAppStore((s) => s.testProvider)
   const testResult = useAppStore((s) => s.testResult)
 
+  const openWorkspace = useAppStore((s) => s.openWorkspace)
+  const clearWorkspace = useAppStore((s) => s.clearWorkspace)
+
   const [appVersion, setAppVersion] = useState('')
   const [updateMsg, setUpdateMsg] = useState<string | null>(null)
   const [updateBusy, setUpdateBusy] = useState(false)
-
-  const setWorkspace = async (workspacePath: string): Promise<void> => {
-    const next = await window.localpilot.setSettings({ workspacePath })
-    useAppStore.setState({ settings: next })
-  }
 
   useEffect(() => {
     void window.localpilot.getVersion().then(setAppVersion)
@@ -143,11 +141,32 @@ export function SettingsPage(): React.JSX.Element {
           <h2 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-faint)]">
             Workspace
           </h2>
+          <p className="mb-3 text-[12px] text-[var(--color-text-muted)]">
+            Like Cursor — pick a project folder. Agent / Plan tools are sandboxed here.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => void openWorkspace()}
+              className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-[var(--color-on-accent)] hover:bg-[var(--color-accent-2)]"
+            >
+              Open Folder…
+            </button>
+            {settings?.workspacePath ? (
+              <button
+                type="button"
+                onClick={() => void clearWorkspace()}
+                className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)]"
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
           <input
             value={settings?.workspacePath ?? ''}
-            onChange={(e) => void setWorkspace(e.target.value)}
-            placeholder="Path sandboxed for file tools"
-            className="lp-input"
+            readOnly
+            placeholder="No folder open"
+            className="lp-input mt-2 font-[var(--font-mono)] text-[12px]"
           />
         </section>
 

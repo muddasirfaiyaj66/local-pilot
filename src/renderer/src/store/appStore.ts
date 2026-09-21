@@ -93,6 +93,8 @@ interface AppState {
   setInteractionMode: (mode: InteractionMode) => void
   setPermissionMode: (mode: PermissionMode) => Promise<void>
   setActiveProvider: (id: string) => Promise<void>
+  openWorkspace: () => Promise<void>
+  clearWorkspace: () => Promise<void>
   refreshProviders: () => Promise<void>
   upsertProvider: (
     config: Omit<ProviderConfig, 'hasApiKey'> & { hasApiKey?: boolean },
@@ -198,6 +200,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setActiveProvider: async (id) => {
     const settings = await window.localpilot.setSettings({ activeProviderId: id })
+    set({ settings })
+  },
+
+  openWorkspace: async () => {
+    const folder = await window.localpilot.openFolder()
+    if (!folder) return
+    const [settings, providers] = await Promise.all([
+      window.localpilot.getSettings(),
+      window.localpilot.listProviders()
+    ])
+    set({ settings, providers, error: null })
+  },
+
+  clearWorkspace: async () => {
+    const settings = await window.localpilot.setSettings({ workspacePath: '' })
     set({ settings })
   },
 

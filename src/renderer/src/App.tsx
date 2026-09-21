@@ -8,6 +8,7 @@ import { LivePreviewPane } from './components/LivePreviewPane'
 import { Composer } from './components/Composer'
 import { PermissionModal } from './components/PermissionModal'
 import { DiffReviewPane } from './components/DiffReviewPane'
+import { WorkspaceBanner, WorkspaceChip } from './components/WorkspaceBar'
 import logoMark from './assets/logo-mark.svg'
 
 export default function App(): React.JSX.Element {
@@ -111,7 +112,10 @@ export default function App(): React.JSX.Element {
               <span className="text-[12px] font-medium text-[var(--color-text)]">LocalPilot</span>
               <span className="text-[var(--color-text-faint)]">·</span>
               <span className="text-[12px] text-[var(--color-text-muted)]">{modeLabel}</span>
+              <div className="flex-1" />
+              <WorkspaceChip />
             </div>
+            <WorkspaceBanner />
             <MessageList />
             <DiffReviewPane />
             <Composer

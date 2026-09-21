@@ -16,6 +16,7 @@ export function MessageList(): React.JSX.Element {
   const error = useAppStore((s) => s.error)
   const sendMessage = useAppStore((s) => s.sendMessage)
   const setView = useAppStore((s) => s.setView)
+  const openWorkspace = useAppStore((s) => s.openWorkspace)
   const plan = useAppStore((s) => s.plan)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -35,9 +36,16 @@ export function MessageList(): React.JSX.Element {
               LocalPilot
             </h2>
             <p className="mt-2 max-w-sm text-[13px] text-[var(--color-text-muted)]">
-              Cursor-style desktop agent. Chat, Plan, or Agent — attach images/files, review diffs,
-              and watch context usage.
+              Cursor-style desktop agent. Open a folder, then Chat / Plan / Agent — attach files,
+              review diffs, watch context.
             </p>
+            <button
+              type="button"
+              onClick={() => void openWorkspace()}
+              className="mt-5 rounded-md bg-[var(--color-accent)] px-4 py-2 text-[13px] font-medium text-[var(--color-on-accent)] hover:bg-[var(--color-accent-2)]"
+            >
+              Open Folder
+            </button>
             <div className="mt-6 flex max-w-md flex-wrap justify-center gap-2">
               {EXAMPLES.map((ex) => (
                 <button

@@ -33,7 +33,8 @@ export const IpcChannels = {
   appGetVersion: 'app:get-version',
   appGetPlatform: 'app:get-platform',
   appCheckUpdates: 'app:check-updates',
-  fsRestore: 'fs:restore'
+  fsRestore: 'fs:restore',
+  dialogOpenFolder: 'dialog:open-folder'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
@@ -106,6 +107,7 @@ export interface LocalPilotApi {
     error?: string
   }>
   restoreFile: (path: string, content: string) => Promise<{ ok: boolean; error?: string }>
+  openFolder: () => Promise<string | null>
 }
 
 export type { AgentStartRequest, PermissionRequest }

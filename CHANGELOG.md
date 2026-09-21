@@ -2,6 +2,13 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.7.1] — 2026-09-21
+
+### Added
+
+- Cursor-style **Open Folder** workspace picker (title chip, banner, Settings, empty state)
+- Ollama provider **Kimi K3 (cloud)** (`kimi-k3:cloud`) alongside Gemma 4
+
 ## [0.7.0] — 2026-09-21
 
 ### Added

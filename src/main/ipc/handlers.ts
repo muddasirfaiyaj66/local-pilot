@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -45,6 +45,23 @@ export function registerIpcHandlers(store: SettingsStore): void {
       }
     }
   )
+  ipcMain.handle(IpcChannels.dialogOpenFolder, async (event): Promise<string | null> => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const opts = {
+      title: 'Open Folder',
+      buttonLabel: 'Select as Workspace',
+      properties: ['openDirectory', 'createDirectory'] as Array<
+        'openDirectory' | 'createDirectory'
+      >
+    }
+    const result = win
+      ? await dialog.showOpenDialog(win, opts)
+      : await dialog.showOpenDialog(opts)
+    if (result.canceled || result.filePaths.length === 0) return null
+    const folder = result.filePaths[0]!
+    store.setSettings({ workspacePath: folder })
+    return folder
+  })
   ipcMain.handle(IpcChannels.settingsGet, () => store.getSettings())
   ipcMain.handle(
     IpcChannels.settingsSet,

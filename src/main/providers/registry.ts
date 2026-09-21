@@ -31,12 +31,21 @@ export function createProvider(
 export const DEFAULT_PROVIDERS: Array<Omit<ProviderConfig, 'hasApiKey'> & { hasApiKey?: boolean }> =
   [
     {
-      id: 'ollama-local',
+      id: 'ollama-gemma',
       kind: 'ollama',
-      name: 'Ollama',
+      name: 'Gemma 4 (cloud)',
       baseUrl: 'http://127.0.0.1:11434',
       model: 'gemma4:31b-cloud',
       visionEnabled: true,
+      enabled: true
+    },
+    {
+      id: 'ollama-kimi',
+      kind: 'ollama',
+      name: 'Kimi K3 (cloud)',
+      baseUrl: 'http://127.0.0.1:11434',
+      model: 'kimi-k3:cloud',
+      visionEnabled: false,
       enabled: true
     },
     {
