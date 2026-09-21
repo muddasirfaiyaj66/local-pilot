@@ -1,17 +1,16 @@
 import { globalShortcut, BrowserWindow } from 'electron'
 
 /**
- * Ctrl/Cmd+Shift+Escape is reserved on Windows (Task Manager) and cannot be
- * registered via Electron globalShortcut. Prefer a free chord; keep Escape as
- * a non-Windows candidate for familiarity.
+ * Ctrl/Cmd+Shift+Escape is reserved on Windows (Task Manager).
+ * Electron accelerators use `.` for the period key — not the word "Period".
  */
 const CANDIDATES =
   process.platform === 'win32'
-    ? (['CommandOrControl+Shift+Period', 'CommandOrControl+Alt+Period', 'CommandOrControl+Shift+K'] as const)
+    ? (['CommandOrControl+Shift+.', 'CommandOrControl+Alt+.', 'CommandOrControl+Shift+K'] as const)
     : ([
         'CommandOrControl+Shift+Escape',
-        'CommandOrControl+Shift+Period',
-        'CommandOrControl+Alt+Period'
+        'CommandOrControl+Shift+.',
+        'CommandOrControl+Alt+.'
       ] as const)
 
 let registeredAccelerator: string | null = null
@@ -20,8 +19,19 @@ function labelFor(accelerator: string): string {
   const isMac = process.platform === 'darwin'
   return accelerator
     .replace('CommandOrControl', isMac ? 'Cmd' : 'Ctrl')
-    .replace('Period', '.')
-    .replace(/\+/g, '+')
+    .replace('Escape', 'Esc')
+}
+
+function tryRegister(accelerator: string, handler: () => void): boolean {
+  try {
+    return globalShortcut.register(accelerator, handler)
+  } catch (err) {
+    console.warn(
+      `[LocalPilot] Kill switch rejected ${labelFor(accelerator)}:`,
+      err instanceof Error ? err.message : err
+    )
+    return false
+  }
 }
 
 export function registerKillSwitch(onKill: () => void): void {
@@ -37,8 +47,7 @@ export function registerKillSwitch(onKill: () => void): void {
   }
 
   for (const accelerator of CANDIDATES) {
-    const ok = globalShortcut.register(accelerator, handler)
-    if (ok) {
+    if (tryRegister(accelerator, handler)) {
       registeredAccelerator = accelerator
       console.log(`[LocalPilot] Kill switch registered: ${labelFor(accelerator)}`)
       return
@@ -52,7 +61,11 @@ export function registerKillSwitch(onKill: () => void): void {
 
 export function unregisterKillSwitch(): void {
   if (!registeredAccelerator) return
-  globalShortcut.unregister(registeredAccelerator)
+  try {
+    globalShortcut.unregister(registeredAccelerator)
+  } catch {
+    /* ignore */
+  }
   registeredAccelerator = null
 }
 

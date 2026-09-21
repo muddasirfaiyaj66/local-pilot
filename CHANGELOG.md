@@ -2,6 +2,12 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.8.7] — 2026-09-21
+
+### Fixed
+
+- Kill switch accelerator uses Electron’s `.` key code (not `Period`), with try/catch so a bad chord cannot crash startup
+
 ## [0.8.6] — 2026-09-21
 
 ### Fixed
