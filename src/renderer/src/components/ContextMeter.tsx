@@ -6,18 +6,17 @@ function formatTokens(n: number): string {
   return String(n)
 }
 
+/** Compact context usage — thin bar + mono label (no model name; select already shows it). */
 export function ContextMeter(): React.JSX.Element {
   const usage = useAppStore((s) => s.usage)
-  const providers = useAppStore((s) => s.providers)
-  const settings = useAppStore((s) => s.settings)
-  const model = providers.find((p) => p.id === settings?.activeProviderId)?.model ?? '—'
 
   if (!usage) {
     return (
-      <div className="flex items-center gap-2 text-[11px] text-[var(--color-text-faint)]">
-        <span className="truncate font-[var(--font-mono)]">{model}</span>
-        <span>·</span>
-        <span>context —</span>
+      <div className="lp-context" title="Context usage">
+        <div className="lp-context-bar" aria-hidden>
+          <div className="lp-context-fill" style={{ width: '0%' }} />
+        </div>
+        <span>—</span>
       </div>
     )
   }
@@ -28,19 +27,19 @@ export function ContextMeter(): React.JSX.Element {
 
   return (
     <div
-      className="flex min-w-0 items-center gap-2 text-[11px] text-[var(--color-text-muted)]"
-      title={`${usage.promptTokens} prompt + ${usage.completionTokens} completion${usage.estimated ? ' (estimated)' : ''}`}
+      className="lp-context"
+      title={`${usage.promptTokens} prompt + ${usage.completionTokens} completion${usage.estimated ? ' (estimated)' : ''} · ${pct}%`}
     >
-      <span className="max-w-[140px] truncate font-[var(--font-mono)] text-[var(--color-text-faint)]">
-        {model}
-      </span>
-      <div className="h-1 w-16 overflow-hidden rounded-full bg-[var(--color-border)]" aria-hidden>
-        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: barColor }} />
+      <div className="lp-context-bar" aria-hidden>
+        <div
+          className="lp-context-fill"
+          style={{ width: `${pct}%`, background: barColor }}
+        />
       </div>
-      <span className="shrink-0 font-[var(--font-mono)] tabular-nums">
+      <span>
         {formatTokens(usage.totalTokens)}
-        <span className="text-[var(--color-text-faint)]"> / {formatTokens(usage.contextLimit)}</span>
-        {usage.estimated ? <span className="text-[var(--color-text-faint)]"> ~</span> : null}
+        <span className="text-[var(--color-text-faint)]">/{formatTokens(usage.contextLimit)}</span>
+        {usage.estimated ? <span className="text-[var(--color-text-faint)]">~</span> : null}
       </span>
     </div>
   )

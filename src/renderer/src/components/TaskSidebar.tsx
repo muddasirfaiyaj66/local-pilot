@@ -14,15 +14,15 @@ export function TaskSidebar(): React.JSX.Element {
 
   return (
     <aside
-      className="flex w-[240px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]"
+      className="flex w-[210px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]"
       aria-label="Chat history"
     >
-      <div className="flex h-9 items-center justify-between px-3">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-faint)]">
+      <div className="flex h-8 items-center justify-between px-2.5">
+        <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-text-faint)]">
           Chats
           {runningCount > 0 ? (
             <span className="ml-1.5 normal-case tracking-normal text-[var(--color-accent)]">
-              · {runningCount} running
+              · {runningCount}
             </span>
           ) : null}
         </span>
@@ -31,21 +31,21 @@ export function TaskSidebar(): React.JSX.Element {
             <button
               type="button"
               onClick={() => void stopAllAgents()}
-              className="lp-icon-btn"
+              className="lp-icon-btn !h-6 !w-6"
               aria-label="Stop all agents"
               title="Stop all agents"
             >
-              <Stop size={12} weight="fill" className="text-[var(--color-danger)]" aria-hidden />
+              <Stop size={11} weight="fill" className="text-[var(--color-danger)]" aria-hidden />
             </button>
           ) : null}
           <button
             type="button"
             onClick={newTask}
-            className="lp-icon-btn"
+            className="lp-icon-btn !h-6 !w-6"
             aria-label="New chat"
             title="New chat — run another agent in parallel"
           >
-            <Plus size={14} weight="bold" aria-hidden />
+            <Plus size={13} weight="bold" aria-hidden />
           </button>
         </div>
       </div>
@@ -61,7 +61,7 @@ export function TaskSidebar(): React.JSX.Element {
                 type="button"
                 onClick={() => selectTask(task.id)}
                 aria-current={active ? 'true' : undefined}
-                className={`mb-0.5 w-full rounded-md py-1.5 pr-14 pl-2.5 text-left transition-colors duration-100 ${
+                className={`mb-px w-full rounded py-1.5 pr-12 pl-2 text-left transition-colors duration-100 ${
                   active
                     ? 'bg-[var(--color-hover)] text-[var(--color-text)]'
                     : 'text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]'
@@ -70,7 +70,7 @@ export function TaskSidebar(): React.JSX.Element {
                 <div className="flex items-center gap-1.5">
                   {running ? (
                     <CircleNotch
-                      size={12}
+                      size={11}
                       className="shrink-0 text-[var(--color-accent)] motion-safe:animate-spin"
                       aria-label="Running"
                     />
@@ -80,7 +80,7 @@ export function TaskSidebar(): React.JSX.Element {
                       title="Needs approval"
                     />
                   ) : null}
-                  <span className="truncate text-[13px]">{task.title}</span>
+                  <span className="truncate text-[12px]">{task.title}</span>
                 </div>
               </button>
               <div className="absolute top-0.5 right-0.5 flex items-center">
@@ -95,7 +95,7 @@ export function TaskSidebar(): React.JSX.Element {
                       void stopTask(task.id)
                     }}
                   >
-                    <Stop size={11} weight="fill" className="text-[var(--color-danger)]" aria-hidden />
+                    <Stop size={10} weight="fill" className="text-[var(--color-danger)]" aria-hidden />
                   </button>
                 ) : null}
                 <button
@@ -108,16 +108,13 @@ export function TaskSidebar(): React.JSX.Element {
                     deleteTask(task.id)
                   }}
                 >
-                  <Trash size={12} aria-hidden />
+                  <Trash size={11} aria-hidden />
                 </button>
               </div>
             </li>
           )
         })}
       </ul>
-      <p className="border-t border-[var(--color-border)] px-3 py-2 text-[10px] leading-snug text-[var(--color-text-faint)]">
-        Open a new chat to run another agent while others keep working.
-      </p>
     </aside>
   )
 }

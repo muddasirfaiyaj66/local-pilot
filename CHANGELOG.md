@@ -2,6 +2,12 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.8.3] — 2026-09-21
+
+### Changed
+
+- Chat/agent UI polish: sleek composer dock (lighter chrome, compact mode/model chips, thin context meter), IDE-style diff review panel above composer, tighter title bar / activity rail / sidebars, cleaner empty state, subtle focus and review motion
+
 ## [0.8.2] — 2026-09-21
 
 ### Changed

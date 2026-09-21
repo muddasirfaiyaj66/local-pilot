@@ -16,7 +16,7 @@ function RunningAgentsBadge(): React.JSX.Element | null {
   const n = Object.values(sessions).filter((s) => s.run.isStreaming).length
   if (n < 2) return null
   return (
-    <span className="rounded-md bg-[var(--color-accent)]/15 px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-accent)]">
+    <span className="rounded bg-[var(--color-accent)]/15 px-1.5 py-px text-[10px] font-medium tabular-nums text-[var(--color-accent)]">
       {n} agents
     </span>
   )
@@ -67,7 +67,7 @@ export default function App(): React.JSX.Element {
         className="flex h-full items-center justify-center text-[var(--color-text-muted)]"
         role="status"
       >
-        <img src={logoMark} alt="" width={28} height={28} className="mr-2 rounded-[6px]" />
+        <img src={logoMark} alt="" width={24} height={24} className="mr-2 rounded-[5px]" />
         Starting LocalPilot…
       </div>
     )
@@ -78,16 +78,13 @@ export default function App(): React.JSX.Element {
 
   return (
     <div className="flex h-full bg-[var(--color-bg)]">
-      <nav
-        className="flex w-10 shrink-0 flex-col items-center gap-1 border-r border-[var(--color-border)] bg-[var(--color-bg)] py-2"
-        aria-label="Primary"
-      >
+      <nav className="lp-rail" aria-label="Primary">
         <img
           src={logoMark}
           alt="LocalPilot"
-          width={26}
-          height={26}
-          className="mb-2 rounded-[6px]"
+          width={22}
+          height={22}
+          className="mb-1.5 rounded-[5px]"
           title="LocalPilot"
         />
         <button
@@ -98,7 +95,7 @@ export default function App(): React.JSX.Element {
           onClick={() => setView('chat')}
           title="Chat"
         >
-          <ChatCircle size={18} weight={view === 'chat' ? 'fill' : 'regular'} aria-hidden />
+          <ChatCircle size={17} weight={view === 'chat' ? 'fill' : 'regular'} aria-hidden />
         </button>
         <button
           type="button"
@@ -108,7 +105,7 @@ export default function App(): React.JSX.Element {
           onClick={() => setView('settings')}
           title="Settings"
         >
-          <Gear size={18} weight={view === 'settings' ? 'fill' : 'regular'} aria-hidden />
+          <Gear size={17} weight={view === 'settings' ? 'fill' : 'regular'} aria-hidden />
         </button>
       </nav>
 
@@ -118,26 +115,29 @@ export default function App(): React.JSX.Element {
         <>
           <TaskSidebar />
           <main className="relative flex min-w-0 flex-1 flex-col bg-[var(--color-bg)]">
-            <div className="flex h-9 shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-4">
-              <img src={logoMark} alt="" width={16} height={16} className="rounded-[3px]" />
-              <span className="text-[12px] font-medium text-[var(--color-text)]">LocalPilot</span>
-              <span className="text-[var(--color-text-faint)]">·</span>
-              <span className="text-[12px] text-[var(--color-text-muted)]">{modeLabel}</span>
+            <div className="lp-titlebar">
+              <img src={logoMark} alt="" width={14} height={14} className="rounded-[2px]" />
+              <span className="text-[12px] font-medium tracking-tight text-[var(--color-text)]">
+                LocalPilot
+              </span>
+              <span className="text-[10px] text-[var(--color-text-faint)]">{modeLabel}</span>
               <RunningAgentsBadge />
               <div className="flex-1" />
               <WorkspaceChip />
             </div>
             <WorkspaceBanner />
-            <MessageList />
-            <DiffReviewPane />
-            <Composer
-              draft={draft}
-              setDraft={setDraft}
-              inputRef={inputRef}
-              onSubmit={onSubmit}
-              onKeyDown={onKeyDown}
-              canSend={(Boolean(draft.trim()) || attachments.length > 0) && !isStreaming}
-            />
+            <div className="flex min-h-0 flex-1 flex-col">
+              <MessageList />
+              <DiffReviewPane />
+              <Composer
+                draft={draft}
+                setDraft={setDraft}
+                inputRef={inputRef}
+                onSubmit={onSubmit}
+                onKeyDown={onKeyDown}
+                canSend={(Boolean(draft.trim()) || attachments.length > 0) && !isStreaming}
+              />
+            </div>
           </main>
           <LivePreviewPane />
         </>

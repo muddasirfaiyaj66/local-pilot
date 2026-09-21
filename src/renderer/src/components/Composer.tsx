@@ -89,10 +89,10 @@ export function Composer({
   }
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[var(--color-bg)] via-[var(--color-bg)] to-transparent px-4 pb-3 pt-10">
+    <div className="lp-composer-dock">
       <form
         onSubmit={onSubmit}
-        className="pointer-events-auto mx-auto w-full max-w-[720px] rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] shadow-[0_8px_30px_rgba(0,0,0,0.45)]"
+        className="lp-composer"
         onDragOver={(e) => {
           e.preventDefault()
           e.stopPropagation()
@@ -113,7 +113,7 @@ export function Composer({
                   <img
                     src={`data:${a.mimeType};base64,${a.data}`}
                     alt=""
-                    className="h-6 w-6 rounded object-cover"
+                    className="h-5 w-5 rounded object-cover"
                   />
                 ) : (
                   <Paperclip size={12} className="text-[var(--color-text-faint)]" aria-hidden />
@@ -133,13 +133,11 @@ export function Composer({
         )}
 
         {showAgentHint && (
-          <div className="flex items-center justify-between gap-2 border-b border-[var(--color-border)] px-3 py-2 text-[11px] text-[var(--color-text-muted)]">
-            <span>
-              Plan mode is read-only. Switch to Agent to create files for this goal.
-            </span>
+          <div className="flex items-center justify-between gap-2 border-b border-[var(--color-border)] px-3 py-1.5 text-[11px] text-[var(--color-text-muted)]">
+            <span>Plan mode is read-only. Switch to Agent to create files.</span>
             <button
               type="button"
-              className="shrink-0 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2 py-0.5 text-[11px] text-[var(--color-text)] hover:bg-[var(--color-hover)]"
+              className="shrink-0 rounded border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2 py-0.5 text-[11px] text-[var(--color-text)] hover:bg-[var(--color-hover)]"
               onClick={() => setInteractionMode('agent')}
             >
               Use Agent
@@ -156,55 +154,62 @@ export function Composer({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
-          rows={3}
+          rows={2}
           placeholder={
             interactionMode === 'plan'
-              ? 'Describe a goal — Plan mode inspects only, then proposes steps…'
+              ? 'Describe a goal — Plan inspects, then proposes steps…'
               : interactionMode === 'agent'
-                ? 'Give the agent a goal (workspace required)…'
-                : 'Chat with the model…'
+                ? 'Give the agent a goal…'
+                : 'Message LocalPilot…'
           }
-          className="min-h-[64px] w-full resize-none border-0 bg-transparent px-3.5 pt-3 pb-1 text-[13px] leading-relaxed text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-faint)]"
+          className="min-h-[52px] max-h-[200px] w-full resize-none border-0 bg-transparent px-3.5 pt-2.5 pb-1 text-[13px] leading-relaxed text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-faint)]"
         />
-        <div className="flex flex-wrap items-center gap-0.5 px-2 pb-2">
-          <select
-            aria-label="Interaction mode"
-            value={interactionMode}
-            onChange={(e) => setInteractionMode(e.target.value as InteractionMode)}
-            className="lp-select"
-          >
-            <option value="agent">Agent</option>
-            <option value="plan">Plan</option>
-            <option value="chat">Chat</option>
-          </select>
 
-          <select
-            aria-label="Model provider"
-            value={activeId}
-            onChange={(e) => void setActiveProvider(e.target.value)}
-            className="lp-select max-w-[200px] truncate"
-          >
-            {providers.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.model}
-              </option>
-            ))}
-          </select>
-
-          {interactionMode !== 'chat' && (
+        <div className="lp-composer-toolbar">
+          <div className="lp-chip">
             <select
-              aria-label="Permission mode"
-              value={settings?.permissionMode ?? 'ask-risky'}
-              onChange={(e) => void setPermissionMode(e.target.value as PermissionMode)}
+              aria-label="Interaction mode"
+              value={interactionMode}
+              onChange={(e) => setInteractionMode(e.target.value as InteractionMode)}
               className="lp-select"
-              title="Ctrl/Cmd+Shift+Esc stops the agent"
             >
-              {MODES.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
+              <option value="agent">Agent</option>
+              <option value="plan">Plan</option>
+              <option value="chat">Chat</option>
+            </select>
+          </div>
+
+          <div className="lp-chip">
+            <select
+              aria-label="Model provider"
+              value={activeId}
+              onChange={(e) => void setActiveProvider(e.target.value)}
+              className="lp-select max-w-[160px] truncate"
+            >
+              {providers.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.model}
                 </option>
               ))}
             </select>
+          </div>
+
+          {interactionMode !== 'chat' && (
+            <div className="lp-chip">
+              <select
+                aria-label="Permission mode"
+                value={settings?.permissionMode ?? 'ask-risky'}
+                onChange={(e) => void setPermissionMode(e.target.value as PermissionMode)}
+                className="lp-select"
+                title="Ctrl/Cmd+Shift+Esc stops the agent"
+              >
+                {MODES.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           )}
 
           <input
@@ -235,7 +240,7 @@ export function Composer({
             aria-label="Attach image"
             onClick={() => imageRef.current?.click()}
           >
-            <ImageIcon size={16} aria-hidden />
+            <ImageIcon size={15} aria-hidden />
           </button>
           <button
             type="button"
@@ -244,12 +249,10 @@ export function Composer({
             aria-label="Attach file"
             onClick={() => fileRef.current?.click()}
           >
-            <Paperclip size={16} aria-hidden />
+            <Paperclip size={15} aria-hidden />
           </button>
 
-          <div className="min-w-0 flex-1 px-1">
-            <ContextMeter />
-          </div>
+          <ContextMeter />
 
           {isStreaming ? (
             <button
@@ -258,12 +261,12 @@ export function Composer({
               onClick={() => void stopStreaming()}
               aria-label="Stop"
             >
-              <Stop size={12} weight="fill" aria-hidden />
+              <Stop size={11} weight="fill" aria-hidden />
               Stop
             </button>
           ) : (
             <button type="submit" className="lp-send" disabled={!canSend} aria-label="Send">
-              <PaperPlaneTilt size={14} weight="fill" aria-hidden />
+              <PaperPlaneTilt size={13} weight="fill" aria-hidden />
             </button>
           )}
         </div>

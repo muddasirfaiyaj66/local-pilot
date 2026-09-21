@@ -8,10 +8,10 @@
 @theme {
   --color-bg: #0a0a0a;
   --color-surface: #111111;
-  --color-surface-2: #171717;
-  --color-hover: #1f1f1f;
-  --color-border: #2a2a2a;
-  --color-border-strong: #3a3a3a;
+  --color-surface-2: #161616;
+  --color-hover: #1c1c1c;
+  --color-border: #262626;
+  --color-border-strong: #333333;
   --color-text: #e4e4e4;
   --color-text-muted: #8a8a8a;
   --color-text-faint: #5c5c5c;
@@ -23,6 +23,9 @@
   --color-ok: #22c55e;
   --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 140ms;
+  --duration-med: 220ms;
 }
 
 * {
@@ -76,11 +79,11 @@ select:disabled {
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #333;
+  background: #2e2e2e;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-track {
@@ -99,6 +102,8 @@ select:disabled {
   border: 0;
 }
 
+/* —— Form controls —— */
+
 .lp-input {
   width: 100%;
   border: 1px solid var(--color-border);
@@ -108,7 +113,7 @@ select:disabled {
   font-family: var(--font-sans);
   font-size: 13px;
   border-radius: 6px;
-  transition: border-color 120ms ease;
+  transition: border-color var(--duration-fast) ease;
 }
 .lp-input:hover {
   border-color: var(--color-border-strong);
@@ -124,16 +129,22 @@ select:disabled {
 .lp-select {
   appearance: none;
   border: 1px solid transparent;
-  background: transparent;
+  background-color: transparent;
   color: var(--color-text-muted);
   font-family: var(--font-sans);
-  font-size: 12px;
-  padding: 4px 22px 4px 6px;
+  font-size: 11px;
+  line-height: 1;
+  height: 24px;
+  padding: 0 18px 0 6px;
   border-radius: 4px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238a8a8a' viewBox='0 0 256 256'%3E%3Cpath d='M213.66 101.66l-80 80a8 8 0 01-11.32 0l-80-80a8 8 0 0111.32-11.32L128 164.69l74.34-74.35a8 8 0 0111.32 11.32z'/%3E%3C/svg%3E");
+  max-width: 148px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='%235c5c5c' viewBox='0 0 256 256'%3E%3Cpath d='M213.66 101.66l-80 80a8 8 0 01-11.32 0l-80-80a8 8 0 0111.32-11.32L128 164.69l74.34-74.35a8 8 0 0111.32 11.32z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 4px center;
-  transition: color 120ms ease, background-color 120ms ease;
+  background-position: right 3px center;
+  transition:
+    color var(--duration-fast) ease,
+    background-color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease;
 }
 .lp-select:hover {
   color: var(--color-text);
@@ -147,13 +158,15 @@ select:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border: none;
-  border-radius: 6px;
+  border-radius: 5px;
   background: transparent;
   color: var(--color-text-muted);
-  transition: background-color 120ms ease, color 120ms ease;
+  transition:
+    background-color var(--duration-fast) ease,
+    color var(--duration-fast) ease;
 }
 .lp-icon-btn:hover:not(:disabled) {
   background: var(--color-hover);
@@ -174,13 +187,19 @@ select:disabled {
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 999px;
+  border-radius: 6px;
   background: var(--color-accent);
   color: var(--color-on-accent);
-  transition: background-color 120ms ease, opacity 120ms ease;
+  transition:
+    background-color var(--duration-fast) ease,
+    opacity var(--duration-fast) ease,
+    transform var(--duration-fast) var(--ease-out-soft);
 }
 .lp-send:hover:not(:disabled) {
   background: var(--color-accent-2);
+}
+.lp-send:active:not(:disabled) {
+  transform: scale(0.96);
 }
 .lp-send:disabled {
   opacity: 0.35;
@@ -190,17 +209,204 @@ select:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   height: 28px;
   padding: 0 10px;
   border: none;
   border-radius: 6px;
-  background: var(--color-danger);
-  color: #fff;
-  font-size: 12px;
+  background: color-mix(in oklab, var(--color-danger) 18%, var(--color-surface-2));
+  color: #fecaca;
+  font-size: 11px;
   font-weight: 600;
-  transition: opacity 120ms ease;
+  border: 1px solid color-mix(in oklab, var(--color-danger) 35%, transparent);
+  transition: opacity var(--duration-fast) ease, background-color var(--duration-fast) ease;
 }
 .lp-stop:hover {
-  opacity: 0.9;
+  background: color-mix(in oklab, var(--color-danger) 28%, var(--color-surface-2));
+}
+
+/* —— Composer dock —— */
+
+.lp-composer-dock {
+  flex-shrink: 0;
+  padding: 0 12px 10px;
+  background: linear-gradient(to top, var(--color-bg) 70%, transparent);
+}
+
+.lp-composer {
+  margin: 0 auto;
+  width: 100%;
+  max-width: 760px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--color-surface-2) 92%, #000);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 4px 16px rgba(0, 0, 0, 0.28);
+  transition:
+    border-color var(--duration-med) var(--ease-out-soft),
+    box-shadow var(--duration-med) var(--ease-out-soft);
+}
+.lp-composer:focus-within {
+  border-color: color-mix(in oklab, var(--color-accent) 45%, var(--color-border-strong));
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 0 0 1px color-mix(in oklab, var(--color-accent) 22%, transparent),
+    0 6px 20px rgba(0, 0, 0, 0.32);
+}
+
+.lp-composer-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  min-height: 36px;
+  padding: 4px 6px 6px;
+  border-top: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent);
+}
+
+.lp-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 2px;
+  border-radius: 4px;
+}
+
+.lp-context {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  margin-right: 6px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.lp-context-bar {
+  width: 36px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+.lp-context-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width var(--duration-med) var(--ease-out-soft), background-color var(--duration-fast) ease;
+}
+
+/* —— Diff review —— */
+
+.lp-review {
+  flex-shrink: 0;
+  margin: 0 12px 8px;
+  max-width: 760px;
+  width: calc(100% - 24px);
+  align-self: center;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  overflow: hidden;
+  animation: lp-review-in var(--duration-med) var(--ease-out-soft) both;
+}
+@keyframes lp-review-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.lp-review-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 8px;
+  border-bottom: 1px solid color-mix(in oklab, var(--color-border) 80%, transparent);
+  transition: background-color var(--duration-fast) ease;
+}
+.lp-review-row:last-child {
+  border-bottom: none;
+}
+.lp-review-row:hover {
+  background: var(--color-hover);
+}
+
+.lp-btn-keep {
+  height: 22px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--color-ok) 16%, transparent);
+  color: #86efac;
+  font-size: 11px;
+  font-weight: 500;
+  transition: background-color var(--duration-fast) ease;
+}
+.lp-btn-keep:hover {
+  background: color-mix(in oklab, var(--color-ok) 26%, transparent);
+}
+.lp-btn-undo {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  transition:
+    background-color var(--duration-fast) ease,
+    color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease;
+}
+.lp-btn-undo:hover {
+  border-color: color-mix(in oklab, var(--color-danger) 40%, var(--color-border));
+  color: #fca5a5;
+  background: color-mix(in oklab, var(--color-danger) 8%, transparent);
+}
+
+/* —— Chrome —— */
+
+.lp-titlebar {
+  display: flex;
+  height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 12px;
+  background: var(--color-bg);
+}
+
+.lp-rail {
+  display: flex;
+  width: 36px;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-bg);
+  padding: 6px 0;
+}
+
+.lp-msg-enter {
+  animation: lp-fade-up var(--duration-med) var(--ease-out-soft) both;
+}
+@keyframes lp-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

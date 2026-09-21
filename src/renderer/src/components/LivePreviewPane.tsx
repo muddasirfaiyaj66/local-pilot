@@ -40,13 +40,13 @@ export function LivePreviewPane(): React.JSX.Element {
 
   return (
     <aside
-      className="flex w-[280px] shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)]"
+      className="flex w-[260px] shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)]"
       aria-label="Context"
     >
-      <div className="flex h-9 items-center justify-between border-b border-[var(--color-border)] px-3">
+      <div className="flex h-8 items-center justify-between border-b border-[var(--color-border)] px-2.5">
         <div className="flex items-center gap-1.5">
-          <Browser size={14} className="text-[var(--color-text-faint)]" aria-hidden />
-          <span className="text-[12px] text-[var(--color-text-muted)]">Live view</span>
+          <Browser size={13} className="text-[var(--color-text-faint)]" aria-hidden />
+          <span className="text-[11px] text-[var(--color-text-muted)]">Live view</span>
         </div>
         <button
           type="button"
@@ -99,10 +99,10 @@ export function LivePreviewPane(): React.JSX.Element {
           </div>
         )}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col px-3 py-2">
+      <div className="flex min-h-0 flex-1 flex-col px-2.5 py-2">
         <div className="mb-1.5 flex items-center gap-1.5">
-          <ListBullets size={14} className="text-[var(--color-text-faint)]" aria-hidden />
-          <span className="text-[12px] text-[var(--color-text-muted)]">Action timeline</span>
+          <ListBullets size={13} className="text-[var(--color-text-faint)]" aria-hidden />
+          <span className="text-[11px] text-[var(--color-text-muted)]">Action timeline</span>
         </div>
         <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto text-[11px]">
           {timeline.length === 0 && (
