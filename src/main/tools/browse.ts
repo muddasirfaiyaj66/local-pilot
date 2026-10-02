@@ -5,8 +5,9 @@ import { resolveInWorkspace } from './workspace'
 
 export interface WorkspaceTreeNode {
   name: string
+  path: string
   dir: boolean
-  children?: Array<{ name: string; dir: boolean }>
+  children?: WorkspaceTreeNode[]
 }
 
 export function listWorkspaceTree(workspacePath: string): WorkspaceTreeNode[] {
@@ -17,15 +18,19 @@ export function listWorkspaceTree(workspacePath: string): WorkspaceTreeNode[] {
     const abs = join(root, ent.name)
     const dir = ent.isDirectory()
     if (ignore.ignores(abs, dir)) continue
-    const node: WorkspaceTreeNode = { name: ent.name, dir }
+    const node: WorkspaceTreeNode = { name: ent.name, path: ent.name, dir }
     if (dir) {
-      const children: Array<{ name: string; dir: boolean }> = []
+      const children: WorkspaceTreeNode[] = []
       try {
         for (const child of readdirSync(abs, { withFileTypes: true })) {
           const childAbs = join(abs, child.name)
           const childDir = child.isDirectory()
           if (ignore.ignores(childAbs, childDir)) continue
-          children.push({ name: child.name, dir: childDir })
+          children.push({
+            name: child.name,
+            path: `${ent.name}/${child.name}`,
+            dir: childDir
+          })
           if (children.length >= 40) break
         }
       } catch {

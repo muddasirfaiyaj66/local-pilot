@@ -146,6 +146,11 @@ export function searchNotes(query: string, limit = 20): MemoryNote[] {
   return rows
 }
 
+export function deleteNote(id: number): boolean {
+  const result = getMemoryDb().prepare('DELETE FROM notes WHERE id = ?').run(id)
+  return Number(result.changes) > 0
+}
+
 export function listRecentNotes(limit = 20): MemoryNote[] {
   const database = getMemoryDb()
   return database

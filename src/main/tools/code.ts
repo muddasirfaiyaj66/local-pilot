@@ -77,7 +77,8 @@ export const codeTools: RegisteredTool[] = [
   },
   {
     name: 'code_git_commit',
-    description: 'Create a git commit in the workspace with the given message (stages tracked changes with -a).',
+    description:
+      'Stage all changes in the workspace (including new files) and create a git commit with the given message.',
     risk: 'risky',
     timeoutMs: 30_000,
     parameters: GitArgs,
@@ -86,13 +87,14 @@ export const codeTools: RegisteredTool[] = [
       properties: { message: { type: 'string' } },
       required: ['message']
     },
-    preview: (a) => `git commit -am "${String(a.message ?? '')}"`,
+    preview: (a) => `git add -A && git commit -m "${String(a.message ?? '')}"`,
     execute: async (raw, ctx) => {
       try {
         const args = GitArgs.parse(raw)
         if (!args.message?.trim()) return errResult('Commit message required')
         const cwd = resolveInWorkspace(ctx.workspacePath, '.')
-        const out = await git(cwd, ['commit', '-am', args.message.trim()])
+        await git(cwd, ['add', '-A'])
+        const out = await git(cwd, ['commit', '-m', args.message.trim()])
         return okResult(out || 'Committed')
       } catch (err) {
         return errResult(err instanceof Error ? err.message : String(err))

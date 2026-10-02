@@ -41,8 +41,12 @@ const ListArgs = z.object({
 const SearchArgs = z.object({
   query: z.string().min(1),
   path: z.string().default('.'),
+  glob: z.string().optional(),
   maxResults: z.number().int().positive().max(100).optional()
 })
+
+/** Review stores full text only up to this size. Larger writes stay on disk. */
+const REVIEW_CAP = 80_000
 
 const MoveArgs = z.object({
   from: z.string(),
@@ -120,19 +124,20 @@ export const fsTools: RegisteredTool[] = [
       const before = created ? '' : readFileSync(full, 'utf8')
       mkdirSync(dirname(full), { recursive: true })
       writeFileSync(full, args.content, 'utf8')
-      return okResult(`Wrote ${args.content.length} chars to ${full}`, {
+      const review = reviewMeta(before, args.content)
+      return okResult(`Wrote ${args.content.length} chars to ${full}${review.note}`, {
         path: full,
         relativePath: args.path,
-        before,
-        after: args.content,
         kind: 'write',
-        created
+        created,
+        ...review.meta
       })
     })
   },
   {
     name: 'fs_edit',
-    description: 'Replace exact oldText with newText in a file (diff-style edit).',
+    description:
+      'Replace exact oldText with newText once. Fails if oldText is missing or appears more than once.',
     risk: 'risky',
     timeoutMs: 15_000,
     parameters: EditArgs,
@@ -151,17 +156,22 @@ export const fsTools: RegisteredTool[] = [
       const args = EditArgs.parse(raw)
       const full = resolveInWorkspace(ctx.workspacePath, args.path)
       const before = readFileSync(full, 'utf8')
-      if (!before.includes(args.oldText)) {
-        return errResult('oldText not found in file (exact match required)')
+      if (!args.oldText) return errResult('oldText must not be empty')
+      const matches = countOccurrences(before, args.oldText)
+      if (matches === 0) return errResult('oldText not found in file (exact match required)')
+      if (matches > 1) {
+        return errResult(
+          `oldText matched ${matches} times. Provide a longer snippet that matches once.`
+        )
       }
       const after = before.replace(args.oldText, args.newText)
       writeFileSync(full, after, 'utf8')
-      return okResult(`Edited ${full}`, {
+      const review = reviewMeta(before, after)
+      return okResult(`Edited ${full}${review.note}`, {
         path: full,
         relativePath: args.path,
-        before,
-        after,
-        kind: 'edit'
+        kind: 'edit',
+        ...review.meta
       })
     })
   },
@@ -212,7 +222,8 @@ export const fsTools: RegisteredTool[] = [
   },
   {
     name: 'fs_search',
-    description: 'Search file contents under a path for a substring (simple ripgrep-like scan).',
+    description:
+      'Search file contents for a case-insensitive substring. Optional glob limits files (for example *.ts). Returns path:line and the matching line.',
     risk: 'safe',
     timeoutMs: 30_000,
     parameters: SearchArgs,
@@ -221,6 +232,7 @@ export const fsTools: RegisteredTool[] = [
       properties: {
         query: { type: 'string' },
         path: { type: 'string' },
+        glob: { type: 'string', description: 'Optional glob such as *.ts or src/**/*.tsx' },
         maxResults: { type: 'number' }
       },
       required: ['query']
@@ -228,20 +240,24 @@ export const fsTools: RegisteredTool[] = [
     preview: (a) => `Search "${String(a.query ?? '')}" in ${String(a.path ?? '.')}`,
     execute: wrap(async (raw, ctx) => {
       const args = SearchArgs.parse(raw)
+      const workspace = resolveInWorkspace(ctx.workspacePath, '.')
       const root = resolveInWorkspace(ctx.workspacePath, args.path)
       const ignore = loadIgnoreMatcher(ctx.workspacePath)
+      const needle = args.query.toLowerCase()
       const max = args.maxResults ?? 40
       const hits: string[] = []
       walk(root, ignore, (file) => {
         if (hits.length >= max) return false
+        const rel = relative(workspace, file).split('\\').join('/')
+        if (args.glob && !fileMatchesGlob(rel, args.glob)) return true
         try {
           const text = readFileSync(file, 'utf8')
           const lines = text.split(/\r?\n/)
           for (let i = 0; i < lines.length; i++) {
             const line = lines[i] ?? ''
             if (hits.length >= max) return false
-            if (line.includes(args.query)) {
-              hits.push(`${relative(root, file)}:${i + 1}: ${line.trim().slice(0, 200)}`)
+            if (line.toLowerCase().includes(needle)) {
+              hits.push(`${rel}:${i + 1}: ${line.trim().slice(0, 180)}`)
             }
           }
         } catch {
@@ -315,6 +331,70 @@ export const fsTools: RegisteredTool[] = [
     })
   }
 ]
+
+function countOccurrences(haystack: string, needle: string): number {
+  if (!needle) return 0
+  let count = 0
+  let from = 0
+  while (from <= haystack.length) {
+    const at = haystack.indexOf(needle, from)
+    if (at < 0) break
+    count += 1
+    from = at + needle.length
+  }
+  return count
+}
+
+function reviewMeta(before: string, after: string): {
+  note: string
+  meta: Record<string, unknown>
+} {
+  if (before.length <= REVIEW_CAP && after.length <= REVIEW_CAP) {
+    return { note: '', meta: { before, after } }
+  }
+  return {
+    note: ' Change is too large to review in the app; the file on disk is complete.',
+    meta: {
+      oversized: true,
+      beforePreview: before.slice(0, 400),
+      afterPreview: after.slice(0, 400)
+    }
+  }
+}
+
+/** Case-insensitive glob. A pattern with no slash also matches the file name. */
+export function fileMatchesGlob(relPath: string, glob: string): boolean {
+  const globNorm = glob.trim().replace(/\\/g, '/')
+  if (!globNorm || globNorm === '*' || globNorm === '**' || globNorm === '**/*') return true
+  const rel = relPath.replace(/\\/g, '/')
+  const re = globToRegExp(globNorm)
+  if (re.test(rel)) return true
+  if (!globNorm.includes('/')) return re.test(rel.split('/').pop() ?? rel)
+  return false
+}
+
+function globToRegExp(glob: string): RegExp {
+  let pattern = ''
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i]!
+    if (c === '*' && glob[i + 1] === '*') {
+      pattern += '.*'
+      i += 1
+      if (glob[i + 1] === '/') i += 1
+      continue
+    }
+    if (c === '*') {
+      pattern += '[^/]*'
+      continue
+    }
+    if (c === '?') {
+      pattern += '[^/]'
+      continue
+    }
+    pattern += '.+^${}()|[]\\'.includes(c) ? `\\${c}` : c
+  }
+  return new RegExp(`^${pattern}$`, 'i')
+}
 
 function walk(dir: string, ignore: IgnoreMatcher, visit: (file: string) => boolean): boolean {
   if (ignore.ignores(dir, true)) return true

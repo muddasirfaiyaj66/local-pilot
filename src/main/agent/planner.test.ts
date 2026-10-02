@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { mergeEditedPlanTitles } from '@shared/agent'
 import { buildPlan, formatPlanSummary, isCreateBuildGoal, withPlanProgress } from './planner'
 
 describe('planner', () => {
@@ -31,5 +32,15 @@ describe('planner', () => {
     expect(verifying.steps.at(-1)?.status).toBe('active')
     expect(withPlanProgress(verifying, 'done').steps.every((step) => step.status === 'done')).toBe(true)
     expect(withPlanProgress(started, 'fail').steps[0]?.status).toBe('failed')
+  })
+
+  it('keeps a renamed step when progress updates the same ids', () => {
+    const plan = withPlanProgress(buildPlan('fix the parser'), 'act')
+    const renamed = plan.steps[1]
+    expect(renamed).toBeTruthy()
+    const merged = mergeEditedPlanTitles(plan, { [renamed!.id]: 'Rename the parser module' })
+    expect(merged.steps[1]?.title).toBe('Rename the parser module')
+    expect(merged.steps[1]?.status).toBe(renamed!.status)
+    expect(merged.steps[0]?.title).toBe(plan.steps[0]?.title)
   })
 })

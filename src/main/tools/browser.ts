@@ -2,6 +2,20 @@ import { z } from 'zod'
 import { errResult, okResult, type RegisteredTool } from './types'
 import { browserSession } from './browserSession'
 
+export function browserScreenshotMeta(
+  imageBase64: string,
+  width: number,
+  height: number
+): Record<string, unknown> {
+  return {
+    mimeType: 'image/png',
+    imageBase64,
+    width,
+    height,
+    visionSource: 'browser'
+  }
+}
+
 const UrlArgs = z.object({ url: z.string().url() })
 const SelectorArgs = z.object({
   selector: z.string().min(1),
@@ -167,13 +181,10 @@ export const browserTools: RegisteredTool[] = [
     jsonSchema: { type: 'object', properties: {} },
     preview: () => 'Browser screenshot',
     execute: wrap(async () => {
-      const b64 = await browserSession.screenshotBase64()
+      const shot = await browserSession.screenshotBase64()
       return okResult(
-        `Screenshot captured (${Math.round(b64.length / 1024)} KB). A PNG is attached for vision.`,
-        {
-          mimeType: 'image/png',
-          imageBase64: b64
-        }
+        `Screenshot ${shot.width}x${shot.height} (${Math.round(shot.base64.length / 1024)} KB). A PNG is attached for vision.`,
+        browserScreenshotMeta(shot.base64, shot.width, shot.height)
       )
     })
   },

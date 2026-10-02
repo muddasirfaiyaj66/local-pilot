@@ -46,7 +46,9 @@ export const IpcChannels = {
   providerModels: 'provider:models',
   mcpGet: 'mcp:get',
   mcpSave: 'mcp:save',
-  auditRecent: 'audit:recent'
+  auditRecent: 'audit:recent',
+  memoryList: 'memory:list',
+  memoryDelete: 'memory:delete'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
@@ -134,14 +136,26 @@ export interface LocalPilotApi {
   readWorkspaceFile: (path: string) => Promise<{ ok: boolean; text?: string; error?: string }>
   listProviderModels: (providerId: string) => Promise<string[]>
   getMcpConfig: () => Promise<{ servers: McpServerConfig[] }>
-  saveMcpConfig: (config: { servers: McpServerConfig[] }) => Promise<{ ok: boolean; error?: string }>
+  saveMcpConfig: (
+    config: { servers: McpServerConfig[] }
+  ) => Promise<{ ok: boolean; error?: string; tools?: number }>
   recentAudit: () => Promise<AuditRow[]>
+  listMemoryNotes: () => Promise<MemoryNoteRow[]>
+  deleteMemoryNote: (id: number) => Promise<{ ok: boolean }>
 }
 
 export interface WorkspaceTreeNode {
   name: string
+  path: string
   dir: boolean
-  children?: Array<{ name: string; dir: boolean }>
+  children?: WorkspaceTreeNode[]
+}
+
+export interface MemoryNoteRow {
+  id: number
+  kind: string
+  content: string
+  createdAt: number
 }
 
 export interface McpServerConfig {

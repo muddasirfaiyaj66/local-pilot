@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { browserTools } from './browser'
+import { browserScreenshotMeta, browserTools } from './browser'
 
 describe('browser tools', () => {
   it('registers required browser tool names', () => {
@@ -18,5 +18,12 @@ describe('browser tools', () => {
     const preview = publish?.preview({ text: 'Hello Facebook' }) ?? ''
     expect(preview).toContain('Hello Facebook')
     expect(preview).toContain('PUBLISH')
+  })
+
+  it('includes viewport size on browser screenshots', () => {
+    const meta = browserScreenshotMeta('abc', 1280, 800)
+    expect(meta.width).toBe(1280)
+    expect(meta.height).toBe(800)
+    expect(meta.visionSource).toBe('browser')
   })
 })

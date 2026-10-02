@@ -2,6 +2,25 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.16.0] — 2026-10-03
+
+### Fixed
+
+- File edits fail when the snippet matches more than once, instead of changing only the first copy
+- Git commit stages new files in the workspace before committing
+- Browser screenshots include their pixel size and no longer replace a desktop frame used for clicks
+- Renamed plan steps stay renamed when the run updates step status
+- Saving MCP config reloads those servers
+- Tool output in the log is no longer cut to a single short line
+- Very large file writes stay on disk and are left out of the in-app review payload
+
+### Added
+
+- File search is case-insensitive and can take a glob
+- Clicking a file in the context pane inserts `@path` into the composer
+- The screen crosshair sits on the picture, including letterboxed frames
+- Settings can list and delete memory notes
+
 ## [0.15.0] — 2026-10-03
 
 ### Added

@@ -1,7 +1,7 @@
 import { CheckCircle, Plus, WarningCircle } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../store/appStore'
-import type { AuditRow, McpServerConfig } from '@shared/ipc'
+import type { AuditRow, McpServerConfig, MemoryNoteRow } from '@shared/ipc'
 import type { ProviderConfig, ProviderKind } from '@shared/types'
 
 const KINDS: { id: ProviderKind; label: string }[] = [
@@ -31,6 +31,7 @@ export function SettingsPage(): React.JSX.Element {
   const [mcpText, setMcpText] = useState('{\n  "servers": []\n}')
   const [mcpMsg, setMcpMsg] = useState<string | null>(null)
   const [auditRows, setAuditRows] = useState<AuditRow[]>([])
+  const [memoryNotes, setMemoryNotes] = useState<MemoryNoteRow[]>([])
 
   useEffect(() => {
     setWorkspaceDraft(settings?.workspacePath ?? '')
@@ -41,6 +42,7 @@ export function SettingsPage(): React.JSX.Element {
     void window.localpilot.getMcpConfig().then((config) => {
       setMcpText(JSON.stringify(config, null, 2))
     })
+    void window.localpilot.listMemoryNotes().then(setMemoryNotes).catch(() => setMemoryNotes([]))
   }, [])
 
   const onCheckUpdates = async (): Promise<void> => {
@@ -220,6 +222,51 @@ export function SettingsPage(): React.JSX.Element {
         </section>
 
         <section className="mt-8 max-w-lg space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-faint)]">
+              Memory
+            </h2>
+            <button
+              type="button"
+              className="text-[11px] text-[var(--color-accent)] hover:underline"
+              onClick={() => void window.localpilot.listMemoryNotes().then(setMemoryNotes)}
+            >
+              Refresh
+            </button>
+          </div>
+          {memoryNotes.length === 0 ? (
+            <p className="text-[12px] text-[var(--color-text-faint)]">No notes stored yet.</p>
+          ) : (
+            <ul className="max-h-48 space-y-1 overflow-y-auto">
+              {memoryNotes.map((note) => (
+                <li
+                  key={note.id}
+                  className="flex items-start gap-2 rounded border border-[var(--color-border)] px-2 py-1.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-faint)]">
+                      {note.kind}
+                    </div>
+                    <p className="text-[12px] text-[var(--color-text-muted)]">{note.content}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-[11px] text-[var(--color-danger)] hover:underline"
+                    onClick={() => {
+                      void window.localpilot.deleteMemoryNote(note.id).then(() => {
+                        setMemoryNotes((rows) => rows.filter((row) => row.id !== note.id))
+                      })
+                    }}
+                  >
+                    Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="mt-8 max-w-lg space-y-3">
           <h2 className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-faint)]">
             MCP servers
           </h2>
@@ -236,7 +283,11 @@ export function SettingsPage(): React.JSX.Element {
               try {
                 const parsed = JSON.parse(mcpText) as { servers: McpServerConfig[] }
                 void window.localpilot.saveMcpConfig(parsed).then((result) => {
-                  setMcpMsg(result.ok ? 'Saved mcp.json. Reload tools from a new agent run.' : result.error ?? 'Save failed')
+                  setMcpMsg(
+                    result.ok
+                      ? `Saved mcp.json and reloaded ${result.tools ?? 0} tool(s).`
+                      : result.error ?? 'Save failed'
+                  )
                 })
               } catch (err) {
                 setMcpMsg(err instanceof Error ? err.message : 'Invalid JSON')

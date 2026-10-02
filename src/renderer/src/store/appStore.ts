@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { AgentPlan, PermissionRequest } from '@shared/agent'
+import { mergeEditedPlanTitles, type AgentPlan, type PermissionRequest } from '@shared/agent'
 import { contextLimitForModel } from '@shared/context'
 import { diffHunks, keepHunk, undoHunk } from '@shared/diff'
 import type { PersistedSessionsPayload, RunningProcess } from '@shared/ipc'
@@ -47,6 +47,8 @@ export interface TimelineEntry {
   id: string
   kind: 'thought' | 'tool' | 'result' | 'status'
   text: string
+  /** Longer tool output shown in the log. Omitted for short rows. */
+  detail?: string
   at: number
   ok?: boolean
 }
@@ -81,6 +83,7 @@ export interface VisionFrame {
   dataUrl: string
   width: number
   height: number
+  source: 'screen' | 'browser'
 }
 
 export interface VisionClick {
@@ -114,6 +117,8 @@ interface TaskSession {
   pendingChanges: PendingFileChange[]
   usage: TokenUsage | null
   checkpoint: RunCheckpoint | null
+  /** Step id → title the user renamed. Survives later plan progress events. */
+  editedPlanTitles: Record<string, string>
   run: TaskRun
 }
 
@@ -145,6 +150,11 @@ interface AppState {
   checkpoint: RunCheckpoint | null
   visionFrame: VisionFrame | null
   visionClick: VisionClick | null
+  editedPlanTitles: Record<string, string>
+  /** Text the Files tab asked the composer to insert. */
+  composerInsert: string | null
+  queueComposerInsert: (text: string) => void
+  clearComposerInsert: () => void
   /** Dev server URL detected from a background process, shown in the preview pane */
   previewUrl: string | null
   setPreviewUrl: (url: string | null) => void
@@ -204,6 +214,7 @@ const emptySession = (): TaskSession => ({
   pendingChanges: [],
   usage: null,
   checkpoint: null,
+  editedPlanTitles: {},
   run: emptyRun()
 })
 
@@ -219,6 +230,7 @@ function snapshotActive(s: AppState): TaskSession | null {
     pendingChanges: s.pendingChanges,
     usage: s.usage,
     checkpoint: s.checkpoint,
+    editedPlanTitles: s.editedPlanTitles,
     run: {
       requestId: s.activeRequestId,
       kind: frozenRunKind(s),
@@ -319,6 +331,10 @@ function sanitizeSession(raw: unknown): TaskSession {
     usage: session.usage ?? null,
     checkpoint:
       session.checkpoint && typeof session.checkpoint.goal === 'string' ? session.checkpoint : null,
+    editedPlanTitles:
+      session.editedPlanTitles && typeof session.editedPlanTitles === 'object'
+        ? session.editedPlanTitles
+        : {},
     run: emptyRun()
   }
 }
@@ -331,6 +347,7 @@ function hydrateFromSession(session: TaskSession): Partial<AppState> {
     pendingChanges: session.pendingChanges,
     usage: session.usage,
     checkpoint: session.checkpoint,
+    editedPlanTitles: session.editedPlanTitles,
     streamingText: session.run.streamingText,
     isStreaming: session.run.isStreaming,
     activeRequestId: session.run.requestId,
@@ -448,7 +465,15 @@ function bindGlobalListeners(get: Get, set: Set): void {
     const requestId = payload.requestId
 
     if (event.type === 'plan') {
-      patchTask(set, taskId, (prev) => ({ ...prev, plan: event.plan }))
+      patchTask(set, taskId, (prev) => {
+        const sameGoal = prev.plan?.goal === event.plan.goal
+        const edited = sameGoal ? prev.editedPlanTitles : {}
+        return {
+          ...prev,
+          editedPlanTitles: edited,
+          plan: mergeEditedPlanTitles(event.plan, edited)
+        }
+      })
     } else if (event.type === 'thought') {
       const entry: TimelineEntry = {
         id: newId(),
@@ -473,12 +498,14 @@ function bindGlobalListeners(get: Get, set: Set): void {
         timeline: [...prev.timeline, entry].slice(-80)
       }))
     } else if (event.type === 'tool_result') {
+      const output = event.result.ok
+        ? event.result.output
+        : `${event.result.error ?? 'failed'}${event.result.output ? `\n${event.result.output}` : ''}`
       const entry: TimelineEntry = {
         id: newId(),
         kind: 'result',
-        text: event.result.ok
-          ? event.result.output.slice(0, 120)
-          : event.result.error ?? 'failed',
+        text: output.slice(0, 120),
+        detail: output.length > 120 ? output.slice(0, 12_000) : undefined,
         at: Date.now(),
         ok: event.result.ok
       }
@@ -488,11 +515,14 @@ function bindGlobalListeners(get: Get, set: Set): void {
       const meta = event.result.meta
       if (meta && typeof meta.imageBase64 === 'string' && meta.imageBase64.length > 32) {
         const mime = typeof meta.mimeType === 'string' ? meta.mimeType : 'image/png'
+        const source = meta.visionSource === 'browser' ? 'browser' : 'screen'
         set({
+          visionClick: null,
           visionFrame: {
             dataUrl: `data:${mime};base64,${meta.imageBase64}`,
             width: typeof meta.width === 'number' ? meta.width : 0,
-            height: typeof meta.height === 'number' ? meta.height : 0
+            height: typeof meta.height === 'number' ? meta.height : 0,
+            source
           }
         })
       }
@@ -515,6 +545,7 @@ function bindGlobalListeners(get: Get, set: Set): void {
         if (
           event.result.ok &&
           meta &&
+          meta.oversized !== true &&
           typeof meta.path === 'string' &&
           typeof meta.before === 'string' &&
           typeof meta.after === 'string'
@@ -630,10 +661,15 @@ export const useAppStore = create<AppState>((set, get) => {
   checkpoint: null,
   visionFrame: null,
   visionClick: null,
+  editedPlanTitles: {},
+  composerInsert: null,
   previewUrl: null,
   processes: [],
 
   setPreviewUrl: (previewUrl) => set({ previewUrl }),
+
+  queueComposerInsert: (text) => set({ composerInsert: text }),
+  clearComposerInsert: () => set({ composerInsert: null }),
 
   refreshProcesses: async () => {
     const processes = await window.localpilot.listProcesses()
@@ -885,6 +921,7 @@ export const useAppStore = create<AppState>((set, get) => {
     const nextTitle = title.trim()
     if (!nextTitle) return
     set((s) => ({
+      editedPlanTitles: { ...s.editedPlanTitles, [id]: nextTitle },
       plan: s.plan
         ? {
             ...s.plan,

@@ -11,6 +11,7 @@ import {
   type PersistedSessionsPayload,
   type ProviderUpsertInput,
   type RunningProcess,
+  type MemoryNoteRow,
   type UpdateCheckResult,
   type WorkspaceTreeNode
 } from '../shared/ipc'
@@ -110,8 +111,15 @@ const api: LocalPilotApi = {
   getMcpConfig: () =>
     ipcRenderer.invoke(IpcChannels.mcpGet) as Promise<{ servers: McpServerConfig[] }>,
   saveMcpConfig: (config: { servers: McpServerConfig[] }) =>
-    ipcRenderer.invoke(IpcChannels.mcpSave, config) as Promise<{ ok: boolean; error?: string }>,
-  recentAudit: () => ipcRenderer.invoke(IpcChannels.auditRecent) as Promise<AuditRow[]>
+    ipcRenderer.invoke(IpcChannels.mcpSave, config) as Promise<{
+      ok: boolean
+      error?: string
+      tools?: number
+    }>,
+  recentAudit: () => ipcRenderer.invoke(IpcChannels.auditRecent) as Promise<AuditRow[]>,
+  listMemoryNotes: () => ipcRenderer.invoke(IpcChannels.memoryList) as Promise<MemoryNoteRow[]>,
+  deleteMemoryNote: (id: number) =>
+    ipcRenderer.invoke(IpcChannels.memoryDelete, id) as Promise<{ ok: boolean }>
 }
 
 contextBridge.exposeInMainWorld('localpilot', api)

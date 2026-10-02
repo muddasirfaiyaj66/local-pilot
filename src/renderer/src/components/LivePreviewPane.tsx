@@ -6,7 +6,7 @@ import {
   Monitor,
   Stop
 } from '@phosphor-icons/react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore, type VisionClick, type VisionFrame } from '../store/appStore'
 import type { WorkspaceTreeNode } from '@shared/ipc'
 
@@ -31,6 +31,9 @@ export function LivePreviewPane(): React.JSX.Element {
   const visionFrame = useAppStore((s) => s.visionFrame)
   const visionClick = useAppStore((s) => s.visionClick)
   const [tree, setTree] = useState<WorkspaceTreeNode[]>([])
+  const frameBoxRef = useRef<HTMLDivElement>(null)
+  const [frameBox, setFrameBox] = useState({ w: 0, h: 0 })
+  const queueComposerInsert = useAppStore((s) => s.queueComposerInsert)
   const workspace = settings?.workspacePath?.trim()
   const folderName = workspace
     ? workspace.replace(/\\/g, '/').split('/').filter(Boolean).pop()
@@ -40,6 +43,16 @@ export function LivePreviewPane(): React.JSX.Element {
     if (tab !== 'files' || !workspace) return
     void window.localpilot.workspaceTree().then(setTree).catch(() => setTree([]))
   }, [tab, workspace])
+
+  useEffect(() => {
+    const el = frameBoxRef.current
+    if (!el || tab !== 'screen') return
+    const update = (): void => setFrameBox({ w: el.clientWidth, h: el.clientHeight })
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [tab, visionFrame, preview])
 
   // Jump to the app as soon as a dev server URL shows up.
   useEffect(() => {
@@ -204,15 +217,24 @@ export function LivePreviewPane(): React.JSX.Element {
         </div>
       ) : tab === 'screen' ? (
         <div className="flex min-h-0 flex-1 flex-col p-2.5">
-          <div className="relative min-h-0 flex-1 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]">
+          <div
+            ref={frameBoxRef}
+            className="relative min-h-0 flex-1 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]"
+          >
             {visionFrame || preview ? (
               <>
                 <img
                   src={(visionFrame ?? preview)!.dataUrl}
-                  alt={visionFrame ? 'Frame sent to the model' : 'Screen preview'}
+                  alt={
+                    visionFrame
+                      ? visionFrame.source === 'browser'
+                        ? 'Browser frame sent to the model'
+                        : 'Screen frame sent to the model'
+                      : 'Screen preview'
+                  }
                   className="h-full w-full object-contain"
                 />
-                <ClickCrosshair frame={visionFrame} click={visionClick} />
+                <ClickCrosshair frame={visionFrame} click={visionClick} box={frameBox} />
               </>
             ) : (
               <div className="flex h-full min-h-[140px] items-center justify-center px-3 text-center text-[11px] text-[var(--color-text-faint)]">
@@ -244,16 +266,10 @@ export function LivePreviewPane(): React.JSX.Element {
             <li className="px-1 py-3 text-[var(--color-text-faint)]">Open a folder to see its files.</li>
           ) : (
             tree.map((node) => (
-              <li key={node.name} className="mb-1">
-                <div className="text-[var(--color-text)]">
-                  {node.name}
-                  {node.dir ? '/' : ''}
-                </div>
+              <li key={node.path} className="mb-1">
+                <TreeRow node={node} onInsert={queueComposerInsert} />
                 {node.children?.map((child) => (
-                  <div key={child.name} className="pl-3 text-[var(--color-text-faint)]">
-                    {child.name}
-                    {child.dir ? '/' : ''}
-                  </div>
+                  <TreeRow key={child.path} node={child} nested onInsert={queueComposerInsert} />
                 ))}
               </li>
             ))
@@ -267,13 +283,19 @@ export function LivePreviewPane(): React.JSX.Element {
             </li>
           )}
           {timeline.map((e) => (
-            <li key={e.id} className="lp-tool-pill">
+            <li key={e.id} className="lp-tool-pill items-start">
               <span className="w-10 shrink-0 text-[9px] uppercase tracking-wide text-[var(--color-text-faint)]">
                 {e.kind}
               </span>
-              <span className="min-w-0 flex-1 truncate font-[var(--font-mono)] text-[11px] text-[var(--color-text-muted)]">
-                {e.text}
-              </span>
+              {e.detail ? (
+                <pre className="max-h-40 min-w-0 flex-1 overflow-auto whitespace-pre-wrap font-[var(--font-mono)] text-[10px] text-[var(--color-text-muted)]">
+                  {e.detail}
+                </pre>
+              ) : (
+                <span className="min-w-0 flex-1 truncate font-[var(--font-mono)] text-[11px] text-[var(--color-text-muted)]">
+                  {e.text}
+                </span>
+              )}
             </li>
           ))}
         </ul>
@@ -282,19 +304,57 @@ export function LivePreviewPane(): React.JSX.Element {
   )
 }
 
+function TreeRow({
+  node,
+  nested,
+  onInsert
+}: {
+  node: WorkspaceTreeNode
+  nested?: boolean
+  onInsert: (text: string) => void
+}): React.JSX.Element {
+  const label = `${node.name}${node.dir ? '/' : ''}`
+  if (node.dir) {
+    return (
+      <div className={nested ? 'pl-3 text-[var(--color-text-faint)]' : 'text-[var(--color-text)]'}>
+        {label}
+      </div>
+    )
+  }
+  return (
+    <button
+      type="button"
+      className={`block max-w-full truncate text-left hover:text-[var(--color-accent)] ${
+        nested ? 'pl-3 text-[var(--color-text-faint)]' : 'text-[var(--color-text)]'
+      }`}
+      title={`Insert @${node.path}`}
+      onClick={() => onInsert(`@${node.path} `)}
+    >
+      {label}
+    </button>
+  )
+}
+
 function ClickCrosshair({
   frame,
-  click
+  click,
+  box
 }: {
   frame: VisionFrame | null
   click: VisionClick | null
+  box: { w: number; h: number }
 }): React.JSX.Element | null {
-  if (!frame || !click) return null
-  const width = click.imageWidth || frame.width
-  const height = click.imageHeight || frame.height
-  if (!width || !height) return null
-  const left = `${Math.min(100, Math.max(0, (click.x / width) * 100))}%`
-  const top = `${Math.min(100, Math.max(0, (click.y / height) * 100))}%`
+  if (!frame || !click || frame.source === 'browser') return null
+  const width = frame.width
+  const height = frame.height
+  if (!width || !height || box.w <= 0 || box.h <= 0) return null
+  if (click.imageWidth && click.imageWidth !== width) return null
+  if (click.imageHeight && click.imageHeight !== height) return null
+  const scale = Math.min(box.w / width, box.h / height)
+  const displayW = width * scale
+  const displayH = height * scale
+  const left = (box.w - displayW) / 2 + (click.x / width) * displayW
+  const top = (box.h - displayH) / 2 + (click.y / height) * displayH
   return (
     <span
       className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[var(--color-accent)]"

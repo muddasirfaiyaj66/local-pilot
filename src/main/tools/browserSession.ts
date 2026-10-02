@@ -80,10 +80,15 @@ class BrowserSession {
     return this.page
   }
 
-  async screenshotBase64(): Promise<string> {
+  async screenshotBase64(): Promise<{ base64: string; width: number; height: number }> {
     const page = await this.getPage()
+    const viewport = page.viewportSize()
     const buf = await page.screenshot({ type: 'png', fullPage: false })
-    return buf.toString('base64')
+    return {
+      base64: buf.toString('base64'),
+      width: viewport?.width ?? 1280,
+      height: viewport?.height ?? 800
+    }
   }
 
   async close(): Promise<void> {

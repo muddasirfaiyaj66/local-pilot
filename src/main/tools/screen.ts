@@ -148,6 +148,39 @@ export async function captureScreenPng(): Promise<{
   }
 }
 
+export function screenScreenshotMeta(shot: {
+  base64: string
+  width: number
+  height: number
+  scaleFactor: number
+}): Record<string, unknown> {
+  return {
+    width: shot.width,
+    height: shot.height,
+    scaleFactor: shot.scaleFactor,
+    mimeType: 'image/png',
+    imageBase64: shot.base64,
+    visionSource: 'screen'
+  }
+}
+
+function clickMeta(
+  x: number,
+  y: number,
+  physical: { x: number; y: number },
+  imageWidth?: number,
+  imageHeight?: number
+): Record<string, unknown> {
+  return {
+    clickX: x,
+    clickY: y,
+    imageWidth,
+    imageHeight,
+    physicalX: physical.x,
+    physicalY: physical.y
+  }
+}
+
 export const screenTools: RegisteredTool[] = [
   {
     name: 'screen_screenshot',
@@ -162,13 +195,7 @@ export const screenTools: RegisteredTool[] = [
       const shot = await captureScreenPng()
       return okResult(
         `Screenshot ${shot.width}x${shot.height} (scaleFactor=${shot.scaleFactor}). A PNG is attached. Click with x,y in this image plus imageWidth=${shot.width} and imageHeight=${shot.height}.`,
-        {
-          width: shot.width,
-          height: shot.height,
-          scaleFactor: shot.scaleFactor,
-          mimeType: 'image/png',
-          imageBase64: shot.base64
-        }
+        screenScreenshotMeta(shot)
       )
     })
   },
@@ -195,14 +222,10 @@ export const screenTools: RegisteredTool[] = [
       const p = scalePoint(args.x, args.y, args.imageWidth, args.imageHeight)
       await mouse.setPosition(new Point(p.x, p.y))
       await mouse.click(Button.LEFT)
-      return okResult(`Clicked at ${p.x},${p.y}`, {
-        clickX: args.x,
-        clickY: args.y,
-        imageWidth: args.imageWidth,
-        imageHeight: args.imageHeight,
-        physicalX: p.x,
-        physicalY: p.y
-      })
+      return okResult(
+        `Clicked at ${p.x},${p.y}`,
+        clickMeta(args.x, args.y, p, args.imageWidth, args.imageHeight)
+      )
     })
   },
   {
@@ -227,7 +250,10 @@ export const screenTools: RegisteredTool[] = [
       const p = scalePoint(args.x, args.y, args.imageWidth, args.imageHeight)
       await mouse.setPosition(new Point(p.x, p.y))
       await mouse.doubleClick(Button.LEFT)
-      return okResult(`Double-clicked at ${p.x},${p.y}`)
+      return okResult(
+        `Double-clicked at ${p.x},${p.y}`,
+        clickMeta(args.x, args.y, p, args.imageWidth, args.imageHeight)
+      )
     })
   },
   {
@@ -257,7 +283,10 @@ export const screenTools: RegisteredTool[] = [
       await mouse.pressButton(Button.LEFT)
       await mouse.move(straightTo(new Point(to.x, to.y)))
       await mouse.releaseButton(Button.LEFT)
-      return okResult(`Dragged to ${to.x},${to.y}`)
+      return okResult(
+        `Dragged to ${to.x},${to.y}`,
+        clickMeta(args.toX, args.toY, to, args.imageWidth, args.imageHeight)
+      )
     })
   },
   {

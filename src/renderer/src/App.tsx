@@ -63,9 +63,20 @@ export default function App(): React.JSX.Element {
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
+  const composerInsert = useAppStore((s) => s.composerInsert)
+  const clearComposerInsert = useAppStore((s) => s.clearComposerInsert)
+
   useEffect(() => {
     void init()
   }, [init])
+
+  useEffect(() => {
+    if (!composerInsert) return
+    setDraft((prev) =>
+      prev && !/\s$/.test(prev) ? `${prev} ${composerInsert}` : `${prev}${composerInsert}`
+    )
+    clearComposerInsert()
+  }, [composerInsert, clearComposerInsert])
 
   useEffect(() => {
     if (ready && view === 'chat') inputRef.current?.focus()

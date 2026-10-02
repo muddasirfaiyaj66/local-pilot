@@ -11,13 +11,20 @@ import {
   type PermissionResponse,
   type ProviderUpsertInput
 } from '@shared/ipc'
-import { loadSessions, saveSessions, type PersistedSessions } from '../agent/memory'
+import {
+  deleteNote,
+  listRecentNotes,
+  loadSessions,
+  saveSessions,
+  type PersistedSessions
+} from '../agent/memory'
 import { runAgentLoop } from '../agent/loop'
 import { createProvider } from '../providers/registry'
 import { readRecentAudit } from '../safety/audit'
 import type { SettingsStore } from '../settings'
 import { listWorkspaceTree, readWorkspaceText, searchWorkspaceFiles } from '../tools/browse'
-import { readMcpConfig, writeMcpConfig } from '../tools/mcp'
+import { loadMcpTools, readMcpConfig, writeMcpConfig } from '../tools/mcp'
+import { refreshDynamicTools } from '../tools/registry'
 import { restoreWorkspaceFile } from '../tools/restore'
 
 const activeStreams = new Map<string, AbortController>()
@@ -143,13 +150,19 @@ export function registerIpcHandlers(store: SettingsStore): void {
     }
   })
   ipcMain.handle(IpcChannels.mcpGet, () => readMcpConfig())
-  ipcMain.handle(IpcChannels.mcpSave, (_e, raw: unknown) => {
+  ipcMain.handle(IpcChannels.mcpSave, async (_e, raw: unknown) => {
     try {
       writeMcpConfig(raw)
-      return { ok: true }
+      const tools = await loadMcpTools()
+      refreshDynamicTools(tools)
+      return { ok: true, tools: tools.length }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
+  })
+  ipcMain.handle(IpcChannels.memoryList, () => listRecentNotes(40))
+  ipcMain.handle(IpcChannels.memoryDelete, (_e, id: number) => {
+    return { ok: deleteNote(Number(id)) }
   })
   ipcMain.handle(IpcChannels.auditRecent, () =>
     readRecentAudit(40).map((entry) => ({

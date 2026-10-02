@@ -21,6 +21,21 @@ export const AgentPlanSchema = z.object({
 })
 export type AgentPlan = z.infer<typeof AgentPlanSchema>
 
+/** Keep titles the user renamed when a later plan event arrives for the same step ids. */
+export function mergeEditedPlanTitles(
+  plan: AgentPlan,
+  editedTitles: Record<string, string>
+): AgentPlan {
+  const ids = Object.keys(editedTitles)
+  if (ids.length === 0) return plan
+  return {
+    ...plan,
+    steps: plan.steps.map((step) =>
+      editedTitles[step.id] ? { ...step, title: editedTitles[step.id]! } : step
+    )
+  }
+}
+
 export const RiskLevelSchema = z.enum(['safe', 'risky', 'critical'])
 export type RiskLevel = z.infer<typeof RiskLevelSchema>
 
