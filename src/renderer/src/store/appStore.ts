@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { AgentPlan, PermissionRequest } from '@shared/agent'
-import type { RunningProcess } from '@shared/ipc'
+import { contextLimitForModel } from '@shared/context'
+import type { PersistedSessionsPayload, RunningProcess } from '@shared/ipc'
 import type {
   AppSettings,
   ChatImage,
@@ -47,6 +48,8 @@ export interface PendingFileChange {
   before: string
   after: string
   kind: 'write' | 'edit'
+  /** True when this path did not exist before the agent wrote it. */
+  created?: boolean
 }
 
 export interface TokenUsage {
@@ -159,14 +162,6 @@ const emptySession = (): TaskSession => ({
   run: emptyRun()
 })
 
-function contextLimitForModel(model: string): number {
-  const m = model.toLowerCase()
-  if (m.includes('gemma') || m.includes('kimi') || m.includes('gpt-4o') || m.includes('claude')) {
-    return 128_000
-  }
-  return 128_000
-}
-
 type Set = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void
 type Get = () => AppState
 
@@ -180,18 +175,20 @@ function snapshotActive(s: AppState): TaskSession | null {
     usage: s.usage,
     run: {
       requestId: s.activeRequestId,
-      kind:
-        s.isStreaming
-          ? s.interactionMode === 'chat'
-            ? 'chat'
-            : s.interactionMode
-          : (s.sessions[s.activeTaskId]?.run.kind ?? null),
+      kind: frozenRunKind(s),
       isStreaming: s.isStreaming,
       streamingText: s.streamingText,
       pendingPermission: s.pendingPermission,
       error: s.error
     }
   }
+}
+
+function frozenRunKind(s: AppState): TaskRun['kind'] {
+  const stored = s.activeTaskId ? (s.sessions[s.activeTaskId]?.run.kind ?? null) : null
+  if (!s.isStreaming) return stored
+  if (stored) return stored
+  return s.interactionMode === 'chat' ? 'chat' : s.interactionMode
 }
 
 function persistActive(get: Get, set: Set): void {
@@ -201,6 +198,81 @@ function persistActive(get: Get, set: Set): void {
   set({
     sessions: { ...s.sessions, [s.activeTaskId]: snap }
   })
+  scheduleSessionSave()
+}
+
+let readState: Get | null = null
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+function sessionForDisk(session: TaskSession): TaskSession {
+  const streaming = session.run.streamingText.trim()
+  const messages =
+    session.run.isStreaming && streaming
+      ? [
+          ...session.messages,
+          {
+            id: `partial_${session.messages.length}`,
+            role: 'assistant' as const,
+            content: `${streaming}\n\n_(interrupted)_`,
+            createdAt: Date.now()
+          }
+        ]
+      : session.messages
+  return {
+    ...session,
+    messages,
+    run: emptyRun()
+  }
+}
+
+function scheduleSessionSave(): void {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    saveTimer = null
+    const get = readState
+    if (!get || typeof window === 'undefined' || !window.localpilot?.saveSessions) return
+    const state = get()
+    const sessions: Record<string, TaskSession> = {}
+    for (const [id, session] of Object.entries(state.sessions)) {
+      sessions[id] = sessionForDisk(session)
+    }
+    const payload: PersistedSessionsPayload = {
+      tasks: state.tasks,
+      activeTaskId: state.activeTaskId,
+      sessions
+    }
+    void window.localpilot.saveSessions(payload).catch(() => undefined)
+  }, 400)
+}
+
+function hydrateSaved(saved: PersistedSessionsPayload | null): Partial<AppState> | null {
+  if (!saved || saved.tasks.length === 0) return null
+  const sessions: Record<string, TaskSession> = {}
+  for (const [id, raw] of Object.entries(saved.sessions)) {
+    sessions[id] = sanitizeSession(raw)
+  }
+  const active =
+    saved.activeTaskId && sessions[saved.activeTaskId] ? saved.activeTaskId : saved.tasks[0]!.id
+  if (!sessions[active]) sessions[active] = emptySession()
+  return {
+    tasks: saved.tasks,
+    activeTaskId: active,
+    sessions,
+    ...hydrateFromSession(sessions[active]!)
+  }
+}
+
+function sanitizeSession(raw: unknown): TaskSession {
+  if (!raw || typeof raw !== 'object') return emptySession()
+  const session = raw as Partial<TaskSession>
+  return {
+    messages: Array.isArray(session.messages) ? session.messages : [],
+    plan: session.plan ?? null,
+    timeline: Array.isArray(session.timeline) ? session.timeline : [],
+    pendingChanges: Array.isArray(session.pendingChanges) ? session.pendingChanges : [],
+    usage: session.usage ?? null,
+    run: emptyRun()
+  }
 }
 
 function hydrateFromSession(session: TaskSession): Partial<AppState> {
@@ -231,6 +303,7 @@ function patchTask(set: Set, taskId: string, fn: (prev: TaskSession) => TaskSess
     }
     return { sessions }
   })
+  scheduleSessionSave()
 }
 
 function applyUsageToTask(
@@ -376,13 +449,15 @@ function bindGlobalListeners(get: Get, set: Set): void {
           typeof meta.before === 'string' &&
           typeof meta.after === 'string'
         ) {
+          const previous = prev.pendingChanges.find((c) => c.path === meta.path)
           const change: PendingFileChange = {
-            id: newId(),
+            id: previous?.id ?? newId(),
             path: meta.path,
             relativePath: String(meta.relativePath ?? meta.path),
-            before: meta.before,
+            before: previous?.before ?? meta.before,
             after: meta.after,
-            kind: meta.kind === 'edit' ? 'edit' : 'write'
+            kind: meta.kind === 'edit' ? 'edit' : 'write',
+            created: previous?.created === true || meta.created === true
           }
           pendingChanges = [...prev.pendingChanges.filter((c) => c.path !== change.path), change]
         }
@@ -393,7 +468,7 @@ function bindGlobalListeners(get: Get, set: Set): void {
         }
       })
     } else if (event.type === 'usage') {
-      applyUsageToTask(set, taskId, event, event.promptTokens == null, get)
+      applyUsageToTask(set, taskId, event, event.estimated === true, get)
     } else if (event.type === 'permission_required') {
       patchTask(set, taskId, (prev) => ({
         ...prev,
@@ -456,7 +531,9 @@ function clearRequest(get: Get, set: Set, requestId: string): void {
   set({ requestToTask: rest })
 }
 
-export const useAppStore = create<AppState>((set, get) => ({
+export const useAppStore = create<AppState>((set, get) => {
+  readState = get
+  return {
   ready: false,
   version: '',
   settings: null,
@@ -499,12 +576,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   init: async () => {
-    const [version, settings, providers] = await Promise.all([
+    const [version, settings, providers, saved] = await Promise.all([
       window.localpilot.getVersion(),
       window.localpilot.getSettings(),
-      window.localpilot.listProviders()
+      window.localpilot.listProviders(),
+      window.localpilot.loadSessions().catch(() => null)
     ])
-    set({ version, settings, providers, ready: true })
+    const hydrated = hydrateSaved(saved)
+    set({ version, settings, providers, ready: true, ...(hydrated ?? {}) })
     bindGlobalListeners(get, set)
     void get().refreshProcesses()
 
@@ -627,6 +706,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         sessions: { [nid]: emptySession() },
         ...hydrateFromSession(emptySession())
       })
+      scheduleSessionSave()
       return
     }
     const nextId = s.activeTaskId === id ? remaining[0]!.id : s.activeTaskId
@@ -637,6 +717,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeTaskId: nextId,
       ...hydrateFromSession(nextSession)
     })
+    scheduleSessionSave()
   },
 
   addAttachment: (att) =>
@@ -655,7 +736,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   rejectChange: async (id) => {
     const change = get().pendingChanges.find((c) => c.id === id)
     if (!change) return
-    const result = await window.localpilot.restoreFile(change.path, change.before)
+    const result = await window.localpilot.restoreFile(change.path, change.before, change.created === true)
     if (!result.ok) {
       set({ error: result.error ?? 'Failed to restore file' })
       return
@@ -671,10 +752,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   rejectAllChanges: async () => {
     const changes = [...get().pendingChanges].reverse()
+    const failedIds = new Set<string>()
+    const errors: string[] = []
     for (const c of changes) {
-      await window.localpilot.restoreFile(c.path, c.before)
+      const result = await window.localpilot.restoreFile(c.path, c.before, c.created === true)
+      if (!result.ok) {
+        failedIds.add(c.id)
+        errors.push(result.error ?? c.relativePath)
+      }
     }
-    set({ pendingChanges: [] })
+    set((s) => ({
+      pendingChanges: s.pendingChanges.filter((c) => failedIds.has(c.id)),
+      error: errors.length > 0 ? `Could not undo: ${errors.join('; ')}` : s.error
+    }))
     persistActive(get, set)
   },
 
@@ -862,10 +952,18 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
         }))
       } else {
+        const history = get().messages
+          .filter((m) => m.role === 'user' || m.role === 'assistant')
+          .map((m) => ({
+            role: m.role,
+            content: m.content,
+            images: m.images
+          }))
         const { requestId } = await window.localpilot.startAgent({
           providerId,
           goal: content || trimmed,
           mode: interactionMode === 'plan' ? 'plan' : 'agent',
+          messages: history,
           // Agent runs use the configured budget from settings.
           ...(interactionMode === 'plan' ? { maxSteps: 4 } : {})
         })
@@ -895,4 +993,5 @@ export const useAppStore = create<AppState>((set, get) => ({
       }))
     }
   }
-}))
+}
+})

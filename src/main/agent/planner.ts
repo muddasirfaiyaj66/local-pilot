@@ -45,12 +45,21 @@ export function buildPlan(goal: string): AgentPlan {
   return { goal: g, steps, editable: true }
 }
 
-/** Goals that create new apps/files from scratch (Plan should not loop on empty dirs). */
+/**
+ * Greenfield app builds only. Ordinary edits ("make the button blue", "write a test")
+ * must not pick up the Vite scaffold guide.
+ */
 export function isCreateBuildGoal(goal: string): boolean {
   const lower = goal.toLowerCase()
-  return /\b(create|build|scaffold|make|implement|generate|write|bootstrap|set\s*up)\b/.test(
-    lower
-  )
+  if (/\b(scaffold|bootstrap)\b/.test(lower)) return true
+  if (/\bnew\s+(project|app|application|website|site)\b/.test(lower)) return true
+  if (
+    /\b(create|build|generate)\b/.test(lower) &&
+    /\b(app|application|website|site|project)\b/.test(lower)
+  ) {
+    return true
+  }
+  return /\bvite\b/.test(lower) && /\b(create|build|scaffold|app|project|new)\b/.test(lower)
 }
 
 /** Human-readable plan text for Plan-mode completion. */

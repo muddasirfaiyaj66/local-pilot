@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { z } from 'zod'
 import { errResult, okResult, type RegisteredTool } from './types'
 import { resolveInWorkspace, WorkspaceError } from './workspace'
@@ -22,6 +22,23 @@ const DENY_PATTERNS: RegExp[] = [
 
 export function isDeniedCommand(command: string): boolean {
   return DENY_PATTERNS.some((re) => re.test(command))
+}
+
+/** Kill a command and its children. On Windows, child.kill() leaves the process tree running. */
+export function killProcessTree(child: ChildProcess): void {
+  if (child.exitCode !== null || child.signalCode !== null) return
+  if (process.platform === 'win32' && child.pid) {
+    try {
+      spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
+        windowsHide: true,
+        stdio: 'ignore'
+      })
+    } catch {
+      child.kill()
+    }
+    return
+  }
+  child.kill('SIGTERM')
 }
 
 /**
@@ -151,13 +168,13 @@ function runCommand(
     const max = 200_000
 
     const onAbort = (): void => {
-      child.kill()
+      killProcessTree(child)
       reject(new Error('Command aborted'))
     }
     signal?.addEventListener('abort', onAbort, { once: true })
 
     const timer = setTimeout(() => {
-      child.kill()
+      killProcessTree(child)
       reject(new Error(`Command timed out after ${timeoutMs}ms`))
     }, timeoutMs)
 

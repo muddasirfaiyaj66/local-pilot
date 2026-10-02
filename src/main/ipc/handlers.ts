@@ -1,8 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
 import { ChatRequestSchema } from '@shared/schemas'
+import { contextLimitForModel } from '@shared/context'
 import { AgentStartRequestSchema, type PermissionRequest } from '@shared/agent'
 import {
   IpcChannels,
@@ -12,19 +11,36 @@ import {
   type PermissionResponse,
   type ProviderUpsertInput
 } from '@shared/ipc'
+import { loadSessions, saveSessions, type PersistedSessions } from '../agent/memory'
 import { runAgentLoop } from '../agent/loop'
 import { createProvider } from '../providers/registry'
 import type { SettingsStore } from '../settings'
+import { restoreWorkspaceFile } from '../tools/restore'
 
 const activeStreams = new Map<string, AbortController>()
-const activeAgents = new Map<
-  string,
-  {
-    controller: AbortController
-    permissionWaiters: Map<string, (allow: boolean) => void>
-    askWaiters: Array<(answer: string) => void>
-  }
->()
+
+interface AgentSession {
+  controller: AbortController
+  permissionWaiters: Map<string, (allow: boolean) => void>
+  askWaiters: Array<(answer: string) => void>
+}
+
+const activeAgents = new Map<string, AgentSession>()
+
+function releaseAgentWaiters(session: AgentSession): void {
+  session.controller.abort()
+  for (const resolve of session.permissionWaiters.values()) resolve(false)
+  session.permissionWaiters.clear()
+  const askers = session.askWaiters.splice(0)
+  for (const resolve of askers) resolve('')
+}
+
+function abortAgentSession(requestId: string): void {
+  const session = activeAgents.get(requestId)
+  if (!session) return
+  releaseAgentWaiters(session)
+  activeAgents.delete(requestId)
+}
 
 export function registerIpcHandlers(store: SettingsStore): void {
   ipcMain.handle(IpcChannels.appGetVersion, () => app.getVersion())
@@ -35,16 +51,35 @@ export function registerIpcHandlers(store: SettingsStore): void {
   })
   ipcMain.handle(
     IpcChannels.fsRestore,
-    (_e, filePath: string, content: string): { ok: boolean; error?: string } => {
+    (_e, filePath: string, content: string, created?: boolean): { ok: boolean; error?: string } => {
       try {
-        mkdirSync(dirname(filePath), { recursive: true })
-        writeFileSync(filePath, content, 'utf8')
+        const workspace = store.getSettings().workspacePath
+        restoreWorkspaceFile(workspace, filePath, content, created === true)
         return { ok: true }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
       }
     }
   )
+  ipcMain.handle(IpcChannels.sessionsLoad, (): PersistedSessions | null => {
+    try {
+      return loadSessions()
+    } catch {
+      return null
+    }
+  })
+  ipcMain.handle(IpcChannels.sessionsSave, (_e, raw: unknown): { ok: boolean } => {
+    const state = raw as PersistedSessions
+    if (!state || !Array.isArray(state.tasks) || !state.sessions || typeof state.sessions !== 'object') {
+      return { ok: false }
+    }
+    saveSessions({
+      tasks: state.tasks,
+      activeTaskId: state.activeTaskId ?? null,
+      sessions: state.sessions
+    })
+    return { ok: true }
+  })
   ipcMain.handle(
     IpcChannels.shellOpenExternal,
     async (_e, url: string): Promise<{ ok: boolean; error?: string }> => {
@@ -202,8 +237,7 @@ export function registerIpcHandlers(store: SettingsStore): void {
   })
 
   ipcMain.handle(IpcChannels.agentAbort, (_e, requestId: string) => {
-    activeAgents.get(requestId)?.controller.abort()
-    activeAgents.delete(requestId)
+    abortAgentSession(requestId)
   })
 
   ipcMain.handle(IpcChannels.screenPreview, async () => {
@@ -232,10 +266,10 @@ export function registerIpcHandlers(store: SettingsStore): void {
     const settings = store.getSettings()
     const requestId = randomUUID()
     const controller = new AbortController()
-    const session = {
+    const session: AgentSession = {
       controller,
       permissionWaiters: new Map<string, (allow: boolean) => void>(),
-      askWaiters: [] as Array<(answer: string) => void>
+      askWaiters: []
     }
     activeAgents.set(requestId, session)
 
@@ -253,6 +287,8 @@ export function registerIpcHandlers(store: SettingsStore): void {
         await runAgentLoop({
           provider,
           goal: request.goal,
+          priorMessages: request.messages,
+          contextLimit: contextLimitForModel(providerConfig.model),
           workspacePath: (latest.workspacePath || settings.workspacePath || '').trim(),
           permissionMode: latest.permissionMode,
           maxSteps: request.maxSteps ?? latest.maxAgentSteps,
@@ -303,8 +339,7 @@ export function abortAllStreams(): void {
     controller.abort()
     activeStreams.delete(id)
   }
-  for (const [id, session] of activeAgents) {
-    session.controller.abort()
-    activeAgents.delete(id)
+  for (const id of [...activeAgents.keys()]) {
+    abortAgentSession(id)
   }
 }

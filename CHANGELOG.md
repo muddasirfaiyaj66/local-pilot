@@ -2,6 +2,27 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.14.0] — 2026-10-03
+
+### Added
+
+- Chats, plans, and pending file reviews persist across restarts
+- Agent and Plan runs include the earlier conversation, including image attachments, so a follow-up or "continue" keeps the thread
+- Project rules from `AGENTS.md` or `.localpilot/rules`, plus recent memory notes, are included at the start of a run
+- Repository index and file search skip `.gitignore` paths, dependency folders, and binary files
+- Context meter uses the model's window instead of a fixed 128k, and long tool transcripts are trimmed before the next turn
+
+### Fixed
+
+- A failed tool result is no longer executed three times in one step; only a thrown timeout or network error is retried once, and that retry aborts the previous child
+- Stop and the kill switch unblock a run that is waiting on Approve/Deny or a question
+- Switching Chat / Plan / Agent while a run is streaming no longer makes Stop abort the wrong channel
+- Undo of a newly created file deletes it, restore stays inside the workspace, and undo-all keeps files that failed to restore
+- "Make the button blue" and "write a test" no longer take the greenfield app scaffold path
+- Provider token counts are kept; the character estimate is labeled as an estimate and does not overwrite them
+- Windows shell stop kills the process tree
+- Deleting a non-empty directory no longer falls through to a recursive remove when trash fails
+
 ## [0.12.0] — 2026-09-21
 
 ### Added

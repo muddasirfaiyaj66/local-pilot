@@ -6,6 +6,7 @@ import {
   type ChatChunkEvent,
   type LocalPilotApi,
   type PermissionResponse,
+  type PersistedSessionsPayload,
   type ProviderUpsertInput,
   type RunningProcess,
   type UpdateCheckResult
@@ -74,11 +75,15 @@ const api: LocalPilotApi = {
       height?: number
       error?: string
     }>,
-  restoreFile: (path, content) =>
-    ipcRenderer.invoke(IpcChannels.fsRestore, path, content) as Promise<{
+  restoreFile: (path, content, created) =>
+    ipcRenderer.invoke(IpcChannels.fsRestore, path, content, created) as Promise<{
       ok: boolean
       error?: string
     }>,
+  loadSessions: () =>
+    ipcRenderer.invoke(IpcChannels.sessionsLoad) as Promise<PersistedSessionsPayload | null>,
+  saveSessions: (state) =>
+    ipcRenderer.invoke(IpcChannels.sessionsSave, state) as Promise<{ ok: boolean }>,
   openFolder: () => ipcRenderer.invoke(IpcChannels.dialogOpenFolder) as Promise<string | null>,
   openExternal: (url: string) =>
     ipcRenderer.invoke(IpcChannels.shellOpenExternal, url) as Promise<{

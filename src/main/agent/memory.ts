@@ -71,8 +71,52 @@ export function getMemoryDb(): DatabaseSync {
       status TEXT NOT NULL,
       created_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS ui_sessions (
+      id INTEGER PRIMARY KEY,
+      payload TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `)
   return db
+}
+
+export interface PersistedSessions {
+  tasks: Array<{ id: string; title: string; updatedAt: number }>
+  activeTaskId: string | null
+  sessions: Record<string, unknown>
+}
+
+export function saveSessions(state: PersistedSessions): void {
+  const database = getMemoryDb()
+  database
+    .prepare(
+      `INSERT INTO ui_sessions (id, payload, updated_at) VALUES (1, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`
+    )
+    .run(JSON.stringify(state), Date.now())
+}
+
+export function loadSessions(): PersistedSessions | null {
+  const database = getMemoryDb()
+  const row = database.prepare('SELECT payload FROM ui_sessions WHERE id = 1').get() as
+    | { payload: string }
+    | undefined
+  if (!row?.payload) return null
+  try {
+    const parsed: unknown = JSON.parse(row.payload)
+    if (!parsed || typeof parsed !== 'object') return null
+    const state = parsed as Partial<PersistedSessions>
+    if (!Array.isArray(state.tasks) || !state.sessions || typeof state.sessions !== 'object') {
+      return null
+    }
+    return {
+      tasks: state.tasks,
+      activeTaskId: state.activeTaskId ?? null,
+      sessions: state.sessions
+    }
+  } catch {
+    return null
+  }
 }
 
 export function addNote(kind: string, content: string): MemoryNote {

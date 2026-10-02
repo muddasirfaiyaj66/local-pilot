@@ -1,6 +1,6 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import { type ChildProcess } from 'node:child_process'
 import { z } from 'zod'
-import { isDeniedCommand, spawnShell } from './shell'
+import { isDeniedCommand, killProcessTree, spawnShell } from './shell'
 import { errResult, okResult, type RegisteredTool } from './types'
 import { resolveInWorkspace, WorkspaceError } from './workspace'
 
@@ -49,12 +49,7 @@ export function stopAllProcesses(): void {
 }
 
 function killTree(proc: ManagedProcess): void {
-  if (proc.child.exitCode !== null || proc.child.killed) return
-  if (process.platform === 'win32' && proc.child.pid) {
-    spawn('taskkill', ['/pid', String(proc.child.pid), '/t', '/f'], { windowsHide: true })
-  } else {
-    proc.child.kill('SIGTERM')
-  }
+  killProcessTree(proc.child)
 }
 
 const StartArgs = z.object({

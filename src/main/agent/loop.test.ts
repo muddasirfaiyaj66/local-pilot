@@ -1,20 +1,22 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ChatStreamChunk } from '@shared/types'
-import type { ModelProvider, ProviderChatParams } from '../providers/base'
-import { fuzzySignature, runAgentLoop } from './loop'
+import type { ModelProvider, ProviderChatMessage, ProviderChatParams } from '../providers/base'
+import { fuzzySignature, isTransientToolError, runAgentLoop, seedConversation, trimTranscript } from './loop'
 
 class ScriptedProvider implements ModelProvider {
   readonly kind = 'mock'
   turn = 0
   readonly seenTools: Array<ProviderChatParams['tools']> = []
+  readonly transcripts: ProviderChatMessage[][] = []
 
   constructor(private readonly turns: Array<ChatStreamChunk[]>) {}
 
   async *chat(params: ProviderChatParams): AsyncGenerator<ChatStreamChunk, void, unknown> {
     this.seenTools.push(params.tools)
+    this.transcripts.push(params.messages)
     const chunks = this.turns[this.turn] ?? [{ type: 'text', text: 'Done.' }, { type: 'done' }]
     this.turn += 1
     for (const c of chunks) yield c
@@ -60,6 +62,40 @@ describe('fuzzySignature', () => {
     const a = fuzzySignature({ id: '1', name: 'shell_run', arguments: { command: 'npm install' } })
     const b = fuzzySignature({ id: '2', name: 'shell_run', arguments: { command: 'npm run dev' } })
     expect(a).not.toBe(b)
+  })
+})
+
+describe('seedConversation', () => {
+  it('keeps prior turns and does not duplicate the current goal', () => {
+    const messages = seedConversation('make it blue', [
+      { role: 'user', content: 'add a button' },
+      { role: 'assistant', content: 'added the button' },
+      { role: 'user', content: 'make it blue', images: [{ mimeType: 'image/png', data: 'abc' }] }
+    ])
+    expect(messages.map((m) => m.content)).toEqual(['add a button', 'added the button', 'make it blue'])
+    expect(messages[2]?.images?.[0]?.data).toBe('abc')
+  })
+})
+
+describe('trimTranscript', () => {
+  it('shortens older tool output once the budget is exceeded', () => {
+    const messages: ProviderChatMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'tool', content: 'x'.repeat(9000) },
+      { role: 'user', content: 'goal' }
+    ]
+    trimTranscript(messages, 100)
+    expect(messages[1]?.content).toContain('earlier context trimmed')
+    expect(messages[2]?.content).toBe('goal')
+  })
+})
+
+describe('isTransientToolError', () => {
+  it('retries timeouts and network drops, not ordinary failures', () => {
+    expect(isTransientToolError('Tool timed out after 1000ms')).toBe(true)
+    expect(isTransientToolError('connect ECONNRESET')).toBe(true)
+    expect(isTransientToolError('Command failed with exit code 1')).toBe(false)
+    expect(isTransientToolError('Aborted')).toBe(false)
   })
 })
 
@@ -112,6 +148,101 @@ describe('runAgentLoop', () => {
       expect(results.length).toBeGreaterThanOrEqual(3)
       expect(results.every((r) => !r.ok)).toBe(true)
       expect(results.at(-1)?.error).toContain('Blocked')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('includes prior messages in the model transcript', async () => {
+    const provider = new ScriptedProvider([
+      [{ type: 'text', text: 'The button is blue.' }, { type: 'done', finishReason: 'stop' }]
+    ])
+
+    await runAgentLoop({
+      provider,
+      goal: 'make it blue',
+      priorMessages: [
+        { role: 'user', content: 'add a button' },
+        { role: 'assistant', content: 'added the button' },
+        { role: 'user', content: 'make it blue' }
+      ],
+      workspacePath: process.cwd(),
+      permissionMode: 'autonomous',
+      maxSteps: 3,
+      onEvent: () => undefined,
+      requestPermission: async () => true,
+      askUser: async () => 'yes'
+    })
+
+    const transcript = provider.transcripts[0] ?? []
+    expect(transcript.some((m) => m.role === 'user' && m.content === 'add a button')).toBe(true)
+    expect(transcript.filter((m) => m.content === 'make it blue')).toHaveLength(1)
+  })
+
+  it('runs a failing command once per model step', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lp-once-'))
+    const marker = join(dir, 'runs.txt')
+    const pathLiteral = marker.replace(/\\/g, '\\\\')
+    const command = `node -e "require('fs').appendFileSync('${pathLiteral}','x');process.exit(1)"`
+    try {
+      const provider = new ScriptedProvider([
+        shellCall('once', command),
+        [{ type: 'text', text: 'Stopped after the failure.' }, { type: 'done', finishReason: 'stop' }]
+      ])
+
+      await runAgentLoop({
+        provider,
+        goal: 'run the check',
+        workspacePath: dir,
+        permissionMode: 'autonomous',
+        maxSteps: 4,
+        onEvent: () => undefined,
+        requestPermission: async () => true,
+        askUser: async () => 'yes'
+      })
+
+      expect(existsSync(marker)).toBe(true)
+      expect(readFileSync(marker, 'utf8')).toBe('x')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('stops when aborted while waiting for permission', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lp-abort-'))
+    const controller = new AbortController()
+    try {
+      const provider = new ScriptedProvider([
+        [
+          {
+            type: 'tool_call',
+            toolCall: {
+              id: 'w1',
+              name: 'fs_write',
+              arguments: { path: 'a.txt', content: 'hi' }
+            }
+          },
+          { type: 'done' }
+        ]
+      ])
+
+      const result = await runAgentLoop({
+        provider,
+        goal: 'write a file',
+        workspacePath: dir,
+        permissionMode: 'ask-every-time',
+        signal: controller.signal,
+        maxSteps: 4,
+        onEvent: () => undefined,
+        requestPermission: () => {
+          controller.abort()
+          return new Promise(() => undefined)
+        },
+        askUser: async () => 'yes'
+      })
+
+      expect(result.status).toBe('stopped')
+      expect(existsSync(join(dir, 'a.txt'))).toBe(false)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

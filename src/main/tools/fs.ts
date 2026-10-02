@@ -5,10 +5,12 @@ import {
   statSync,
   mkdirSync,
   renameSync,
-  existsSync
+  existsSync,
+  rmSync
 } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { z } from 'zod'
+import { loadIgnoreMatcher, type IgnoreMatcher } from './ignore'
 import { errResult, okResult, type RegisteredTool, type ToolContext } from './types'
 import { resolveInWorkspace, WorkspaceError } from './workspace'
 
@@ -114,7 +116,8 @@ export const fsTools: RegisteredTool[] = [
     execute: wrap(async (raw, ctx) => {
       const args = WriteArgs.parse(raw)
       const full = resolveInWorkspace(ctx.workspacePath, args.path)
-      const before = existsSync(full) ? readFileSync(full, 'utf8') : ''
+      const created = !existsSync(full)
+      const before = created ? '' : readFileSync(full, 'utf8')
       mkdirSync(dirname(full), { recursive: true })
       writeFileSync(full, args.content, 'utf8')
       return okResult(`Wrote ${args.content.length} chars to ${full}`, {
@@ -122,7 +125,8 @@ export const fsTools: RegisteredTool[] = [
         relativePath: args.path,
         before,
         after: args.content,
-        kind: 'write'
+        kind: 'write',
+        created
       })
     })
   },
@@ -183,8 +187,12 @@ export const fsTools: RegisteredTool[] = [
         .slice(0, max)
         .map((name) => {
           const p = join(full, name)
-          const st = statSync(p)
-          return `${st.isDirectory() ? 'dir' : 'file'} ${name}`
+          try {
+            const st = statSync(p)
+            return `${st.isDirectory() ? 'dir' : 'file'} ${name}`
+          } catch {
+            return `file ${name}`
+          }
         })
       const rel = relative(resolveInWorkspace(ctx.workspacePath, '.'), full) || '.'
       const header = [
@@ -221,23 +229,25 @@ export const fsTools: RegisteredTool[] = [
     execute: wrap(async (raw, ctx) => {
       const args = SearchArgs.parse(raw)
       const root = resolveInWorkspace(ctx.workspacePath, args.path)
+      const ignore = loadIgnoreMatcher(ctx.workspacePath)
       const max = args.maxResults ?? 40
       const hits: string[] = []
-      walk(root, (file) => {
+      walk(root, ignore, (file) => {
         if (hits.length >= max) return false
         try {
           const text = readFileSync(file, 'utf8')
           const lines = text.split(/\r?\n/)
-          lines.forEach((line, i) => {
-            if (hits.length >= max) return
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i] ?? ''
+            if (hits.length >= max) return false
             if (line.includes(args.query)) {
               hits.push(`${relative(root, file)}:${i + 1}: ${line.trim().slice(0, 200)}`)
             }
-          })
+          }
         } catch {
           // skip binary / unreadable
         }
-        return true
+        return hits.length < max
       })
       return okResult(hits.length ? hits.join('\n') : 'No matches')
     })
@@ -288,24 +298,33 @@ export const fsTools: RegisteredTool[] = [
         await trashFn([full])
         return okResult(`Moved to trash: ${full}`)
       } catch {
-        const { rmSync } = await import('node:fs')
-        rmSync(full, { recursive: true, force: false })
-        return okResult(`Deleted: ${full}`)
+        try {
+          const st = statSync(full)
+          if (st.isDirectory()) {
+            rmSync(full, { recursive: false, force: false })
+          } else {
+            rmSync(full)
+          }
+          return okResult(`Deleted: ${full}`)
+        } catch (err) {
+          return errResult(
+            err instanceof Error ? err.message : 'Could not delete path (trash failed and the path is not an empty file or directory)'
+          )
+        }
       }
     })
   }
 ]
 
-function walk(dir: string, visit: (file: string) => boolean): void {
-  const skip = new Set(['node_modules', '.git', 'out', 'release', 'dist', '.cursor'])
+function walk(dir: string, ignore: IgnoreMatcher, visit: (file: string) => boolean): boolean {
+  if (ignore.ignores(dir, true)) return true
   let entries: string[]
   try {
     entries = readdirSync(dir)
   } catch {
-    return
+    return true
   }
   for (const name of entries) {
-    if (skip.has(name)) continue
     const p = join(dir, name)
     let st
     try {
@@ -314,9 +333,12 @@ function walk(dir: string, visit: (file: string) => boolean): void {
       continue
     }
     if (st.isDirectory()) {
-      walk(p, visit)
+      if (ignore.ignores(p, true)) continue
+      if (!walk(p, ignore, visit)) return false
     } else if (st.isFile() && st.size < 1_000_000) {
-      if (!visit(p)) return
+      if (ignore.ignores(p, false)) continue
+      if (!visit(p)) return false
     }
   }
+  return true
 }

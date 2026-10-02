@@ -1,6 +1,9 @@
 import { execFile } from 'node:child_process'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { z } from 'zod'
+import { loadIgnoreMatcher, type IgnoreMatcher } from './ignore'
 import { errResult, okResult, type RegisteredTool } from './types'
 import { resolveInWorkspace, WorkspaceError } from './workspace'
 
@@ -152,7 +155,8 @@ export const codeTools: RegisteredTool[] = [
   },
   {
     name: 'code_repo_index',
-    description: 'List top-level project structure (package.json scripts + root entries).',
+    description:
+      'List a shallow project tree (gitignore-aware) plus manifest scripts (package.json and similar).',
     risk: 'safe',
     timeoutMs: 10_000,
     parameters: z.object({}),
@@ -160,24 +164,63 @@ export const codeTools: RegisteredTool[] = [
     preview: () => 'Index repository',
     execute: async (_args, ctx) => {
       try {
-        const { readFileSync, readdirSync, existsSync } = await import('node:fs')
-        const { join } = await import('node:path')
         const root = resolveInWorkspace(ctx.workspacePath, '.')
-        const entries = readdirSync(root).slice(0, 80).join('\n')
-        let scripts = ''
-        const pkg = join(root, 'package.json')
-        if (existsSync(pkg)) {
-          const json = JSON.parse(readFileSync(pkg, 'utf8')) as {
-            scripts?: Record<string, string>
-          }
-          scripts = Object.entries(json.scripts ?? {})
-            .map(([k, v]) => `${k}: ${v}`)
-            .join('\n')
-        }
-        return okResult(`# root\n${entries}\n\n# scripts\n${scripts || '(none)'}`)
+        const ignore = loadIgnoreMatcher(root)
+        const tree = shallowTree(root, ignore)
+        const manifests = readManifests(root)
+        return okResult(`# tree\n${tree || '(empty)'}\n\n${manifests}`)
       } catch (err) {
         return errResult(err instanceof Error ? err.message : String(err))
       }
     }
   }
 ]
+
+const TREE_LIMIT = 160
+
+function shallowTree(root: string, ignore: IgnoreMatcher): string {
+  const lines: string[] = []
+  const entries = readdirSync(root, { withFileTypes: true })
+  for (const ent of entries) {
+    if (lines.length >= TREE_LIMIT) break
+    const abs = join(root, ent.name)
+    const isDir = ent.isDirectory()
+    if (ignore.ignores(abs, isDir)) continue
+    lines.push(isDir ? `${ent.name}/` : ent.name)
+    if (!isDir) continue
+    let children
+    try {
+      children = readdirSync(abs, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const child of children) {
+      if (lines.length >= TREE_LIMIT) break
+      const childAbs = join(abs, child.name)
+      const childDir = child.isDirectory()
+      if (ignore.ignores(childAbs, childDir)) continue
+      lines.push(`  ${child.name}${childDir ? '/' : ''}`)
+    }
+  }
+  return lines.join('\n')
+}
+
+function readManifests(root: string): string {
+  const sections: string[] = []
+  const pkg = join(root, 'package.json')
+  if (existsSync(pkg)) {
+    try {
+      const json = JSON.parse(readFileSync(pkg, 'utf8')) as { scripts?: Record<string, string> }
+      const scripts = Object.entries(json.scripts ?? {})
+        .map(([k, v]) => `${k}: ${v}`)
+        .join('\n')
+      sections.push(`# package.json scripts\n${scripts || '(none)'}`)
+    } catch {
+      sections.push('# package.json scripts\n(unreadable)')
+    }
+  }
+  for (const name of ['pyproject.toml', 'Cargo.toml', 'go.mod', 'requirements.txt']) {
+    if (existsSync(join(root, name))) sections.push(`# manifest\n${name}`)
+  }
+  return sections.join('\n\n') || '# manifests\n(none)'
+}

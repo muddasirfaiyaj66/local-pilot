@@ -34,6 +34,8 @@ export const IpcChannels = {
   appGetPlatform: 'app:get-platform',
   appCheckUpdates: 'app:check-updates',
   fsRestore: 'fs:restore',
+  sessionsLoad: 'sessions:load',
+  sessionsSave: 'sessions:save',
   dialogOpenFolder: 'dialog:open-folder',
   shellOpenExternal: 'shell:open-external',
   procList: 'proc:list',
@@ -109,11 +111,23 @@ export interface LocalPilotApi {
     height?: number
     error?: string
   }>
-  restoreFile: (path: string, content: string) => Promise<{ ok: boolean; error?: string }>
+  restoreFile: (
+    path: string,
+    content: string,
+    created?: boolean
+  ) => Promise<{ ok: boolean; error?: string }>
+  loadSessions: () => Promise<PersistedSessionsPayload | null>
+  saveSessions: (state: PersistedSessionsPayload) => Promise<{ ok: boolean }>
   openFolder: () => Promise<string | null>
   openExternal: (url: string) => Promise<{ ok: boolean; error?: string }>
   listProcesses: () => Promise<RunningProcess[]>
   stopProcess: (id: string) => Promise<{ ok: boolean }>
+}
+
+export interface PersistedSessionsPayload {
+  tasks: Array<{ id: string; title: string; updatedAt: number }>
+  activeTaskId: string | null
+  sessions: Record<string, unknown>
 }
 
 export interface RunningProcess {

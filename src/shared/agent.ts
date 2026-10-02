@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import {
+  ChatImageSchema,
   ChatMessageSchema,
   PermissionModeSchema,
   ToolCallSchema,
@@ -52,7 +53,9 @@ export const AgentEventSchema = z.discriminatedUnion('type', [
     type: z.literal('usage'),
     promptTokens: z.number().optional(),
     completionTokens: z.number().optional(),
-    totalTokens: z.number().optional()
+    totalTokens: z.number().optional(),
+    /** True when the counts are a character estimate rather than provider usage. */
+    estimated: z.boolean().optional()
   }),
   z.object({ type: z.literal('done'), summary: z.string().optional() })
 ])
@@ -65,7 +68,8 @@ export const AgentStartRequestSchema = z.object({
   messages: z.array(
     z.object({
       role: z.enum(['system', 'user', 'assistant', 'tool']),
-      content: z.string()
+      content: z.string(),
+      images: z.array(ChatImageSchema).optional()
     })
   ).optional(),
   /** Omit to use the configured Agent step budget. */
