@@ -39,7 +39,14 @@ export const IpcChannels = {
   dialogOpenFolder: 'dialog:open-folder',
   shellOpenExternal: 'shell:open-external',
   procList: 'proc:list',
-  procStop: 'proc:stop'
+  procStop: 'proc:stop',
+  workspaceTree: 'workspace:tree',
+  workspaceSearchFiles: 'workspace:search-files',
+  workspaceReadFile: 'workspace:read-file',
+  providerModels: 'provider:models',
+  mcpGet: 'mcp:get',
+  mcpSave: 'mcp:save',
+  auditRecent: 'audit:recent'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
@@ -122,6 +129,35 @@ export interface LocalPilotApi {
   openExternal: (url: string) => Promise<{ ok: boolean; error?: string }>
   listProcesses: () => Promise<RunningProcess[]>
   stopProcess: (id: string) => Promise<{ ok: boolean }>
+  workspaceTree: () => Promise<WorkspaceTreeNode[]>
+  searchWorkspaceFiles: (query: string) => Promise<string[]>
+  readWorkspaceFile: (path: string) => Promise<{ ok: boolean; text?: string; error?: string }>
+  listProviderModels: (providerId: string) => Promise<string[]>
+  getMcpConfig: () => Promise<{ servers: McpServerConfig[] }>
+  saveMcpConfig: (config: { servers: McpServerConfig[] }) => Promise<{ ok: boolean; error?: string }>
+  recentAudit: () => Promise<AuditRow[]>
+}
+
+export interface WorkspaceTreeNode {
+  name: string
+  dir: boolean
+  children?: Array<{ name: string; dir: boolean }>
+}
+
+export interface McpServerConfig {
+  name: string
+  command: string
+  args: string[]
+  env?: Record<string, string>
+}
+
+export interface AuditRow {
+  timestamp: number
+  toolName: string
+  risk: string
+  preview: string
+  ok: boolean
+  detail?: string
 }
 
 export interface PersistedSessionsPayload {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildPlan, formatPlanSummary, isCreateBuildGoal } from './planner'
+import { buildPlan, formatPlanSummary, isCreateBuildGoal, withPlanProgress } from './planner'
 
 describe('planner', () => {
   it('detects create/build goals', () => {
@@ -18,5 +18,18 @@ describe('planner', () => {
     const plan = buildPlan('create a todo application')
     expect(plan.steps.some((s) => /scaffold/i.test(s.title))).toBe(true)
     expect(formatPlanSummary(plan)).toMatch(/Switch to Agent mode/)
+  })
+
+  it('advances step status through a run', () => {
+    const plan = buildPlan('fix the parser')
+    const started = withPlanProgress(plan, 'start')
+    expect(started.steps[0]?.status).toBe('active')
+    const acting = withPlanProgress(started, 'act')
+    expect(acting.steps[0]?.status).toBe('done')
+    expect(acting.steps[1]?.status).toBe('active')
+    const verifying = withPlanProgress(acting, 'verify')
+    expect(verifying.steps.at(-1)?.status).toBe('active')
+    expect(withPlanProgress(verifying, 'done').steps.every((step) => step.status === 'done')).toBe(true)
+    expect(withPlanProgress(started, 'fail').steps[0]?.status).toBe('failed')
   })
 })

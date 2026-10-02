@@ -8,10 +8,10 @@
 @theme {
   --color-bg: #0a0a0a;
   --color-surface: #111111;
-  --color-surface-2: #161616;
-  --color-hover: #1c1c1c;
-  --color-border: #262626;
-  --color-border-strong: #333333;
+  --color-surface-2: #171717;
+  --color-hover: #1f1f1f;
+  --color-border: #2a2a2a;
+  --color-border-strong: #3a3a3a;
   --color-text: #e4e4e4;
   --color-text-muted: #8a8a8a;
   --color-text-faint: #5c5c5c;
@@ -338,6 +338,45 @@ select:disabled {
   background: var(--color-hover);
 }
 
+.lp-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+}
+.lp-btn:hover:not(:disabled) {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.lp-btn-accent {
+  border-color: transparent;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+.lp-btn-accent:hover:not(:disabled) {
+  background: var(--color-accent-2);
+  color: var(--color-on-accent);
+}
+.lp-btn-danger {
+  border-color: color-mix(in oklab, var(--color-danger) 40%, var(--color-border));
+  color: #fca5a5;
+  background: color-mix(in oklab, var(--color-danger) 8%, transparent);
+}
+.lp-btn-ghost {
+  background: transparent;
+}
+.lp-btn-quiet {
+  border-color: transparent;
+  color: var(--color-text-faint);
+}
+
 .lp-btn-keep {
   height: 22px;
   padding: 0 8px;
@@ -387,7 +426,7 @@ select:disabled {
 
 .lp-rail {
   display: flex;
-  width: 36px;
+  width: 40px;
   flex-shrink: 0;
   flex-direction: column;
   align-items: center;
@@ -528,7 +567,7 @@ details[open] > .lp-plan-summary::before {
 
 .lp-context-pane {
   display: flex;
-  width: 240px;
+  width: 280px;
   flex-shrink: 0;
   flex-direction: column;
   border-left: 1px solid var(--color-border);

@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 
@@ -33,6 +33,17 @@ export function appendAudit(entry: AuditEntry): void {
     appendFileSync(auditPath(), line + '\n', 'utf8')
   } catch (err) {
     console.warn('[LocalPilot] audit write failed', err)
+  }
+}
+
+export function readRecentAudit(limit = 40): AuditEntry[] {
+  try {
+    const path = auditPath()
+    if (!existsSync(path)) return []
+    const lines = readFileSync(path, 'utf8').trim().split(/\n/).filter(Boolean)
+    return lines.slice(-limit).map((line) => JSON.parse(line) as AuditEntry).reverse()
+  } catch {
+    return []
   }
 }
 

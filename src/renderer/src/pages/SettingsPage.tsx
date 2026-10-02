@@ -1,6 +1,7 @@
 import { CheckCircle, Plus, WarningCircle } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../store/appStore'
+import type { AuditRow, McpServerConfig } from '@shared/ipc'
 import type { ProviderConfig, ProviderKind } from '@shared/types'
 
 const KINDS: { id: ProviderKind; label: string }[] = [
@@ -26,6 +27,10 @@ export function SettingsPage(): React.JSX.Element {
   const [updateMsg, setUpdateMsg] = useState<string | null>(null)
   const [updateBusy, setUpdateBusy] = useState(false)
   const [workspaceDraft, setWorkspaceDraft] = useState(settings?.workspacePath ?? '')
+  const [models, setModels] = useState<string[]>([])
+  const [mcpText, setMcpText] = useState('{\n  "servers": []\n}')
+  const [mcpMsg, setMcpMsg] = useState<string | null>(null)
+  const [auditRows, setAuditRows] = useState<AuditRow[]>([])
 
   useEffect(() => {
     setWorkspaceDraft(settings?.workspacePath ?? '')
@@ -33,6 +38,9 @@ export function SettingsPage(): React.JSX.Element {
 
   useEffect(() => {
     void window.localpilot.getVersion().then(setAppVersion)
+    void window.localpilot.getMcpConfig().then((config) => {
+      setMcpText(JSON.stringify(config, null, 2))
+    })
   }, [])
 
   const onCheckUpdates = async (): Promise<void> => {
@@ -213,6 +221,61 @@ export function SettingsPage(): React.JSX.Element {
 
         <section className="mt-8 max-w-lg space-y-3">
           <h2 className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-faint)]">
+            MCP servers
+          </h2>
+          <textarea
+            className="lp-input min-h-[120px] font-[var(--font-mono)] text-[11px]"
+            value={mcpText}
+            onChange={(e) => setMcpText(e.target.value)}
+            spellCheck={false}
+          />
+          <button
+            type="button"
+            className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-[13px] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]"
+            onClick={() => {
+              try {
+                const parsed = JSON.parse(mcpText) as { servers: McpServerConfig[] }
+                void window.localpilot.saveMcpConfig(parsed).then((result) => {
+                  setMcpMsg(result.ok ? 'Saved mcp.json. Reload tools from a new agent run.' : result.error ?? 'Save failed')
+                })
+              } catch (err) {
+                setMcpMsg(err instanceof Error ? err.message : 'Invalid JSON')
+              }
+            }}
+          >
+            Save MCP config
+          </button>
+          {mcpMsg && <p className="text-[12px] text-[var(--color-text-muted)]">{mcpMsg}</p>}
+        </section>
+
+        <section className="mt-8 max-w-lg space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-faint)]">
+              Audit
+            </h2>
+            <button
+              type="button"
+              className="text-[11px] text-[var(--color-accent)] hover:underline"
+              onClick={() => void window.localpilot.recentAudit().then(setAuditRows)}
+            >
+              Refresh
+            </button>
+          </div>
+          {auditRows.length === 0 ? (
+            <p className="text-[12px] text-[var(--color-text-faint)]">No audit entries loaded.</p>
+          ) : (
+            <ul className="max-h-48 space-y-1 overflow-y-auto">
+              {auditRows.map((row, index) => (
+                <li key={`${row.timestamp}-${index}`} className="font-[var(--font-mono)] text-[10px] text-[var(--color-text-muted)]">
+                  {row.ok ? 'ok' : 'fail'} {row.toolName} · {row.risk}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="mt-8 max-w-lg space-y-3">
+          <h2 className="text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-faint)]">
             About & updates
           </h2>
           <p className="text-[13px] text-[var(--color-text-muted)]">
@@ -268,6 +331,31 @@ export function SettingsPage(): React.JSX.Element {
               value={form.model}
               onChange={(e) => setForm({ ...form, model: e.target.value })}
             />
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="text-[11px] text-[var(--color-accent)] hover:underline"
+                onClick={() => {
+                  if (!selectedId) return
+                  void window.localpilot.listProviderModels(selectedId).then(setModels)
+                }}
+              >
+                List models
+              </button>
+              {models.length > 0 && (
+                <select
+                  className="lp-input !w-auto !py-1 text-[12px]"
+                  value={form.model}
+                  onChange={(e) => setForm({ ...form, model: e.target.value })}
+                >
+                  {models.map((model) => (
+                    <option key={model} value={model}>
+                      {model}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           </Field>
           <Field label={selected?.hasApiKey ? 'API key (saved — blank keeps it)' : 'API key'}>
             <input

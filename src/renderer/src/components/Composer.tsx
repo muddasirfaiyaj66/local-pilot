@@ -1,5 +1,5 @@
 import { Image as ImageIcon, Paperclip, PaperPlaneTilt, Stop, X } from '@phosphor-icons/react'
-import { useRef, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
+import { useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
 import { useAppStore, type InteractionMode } from '../store/appStore'
 import type { PermissionMode } from '@shared/types'
 import { ContextMeter } from './ContextMeter'
@@ -72,6 +72,34 @@ export function Composer({
   const stopStreaming = useAppStore((s) => s.stopStreaming)
   const fileRef = useRef<HTMLInputElement>(null)
   const imageRef = useRef<HTMLInputElement>(null)
+  const [mentions, setMentions] = useState<string[]>([])
+  const [mentionStart, setMentionStart] = useState<number | null>(null)
+
+  const syncMention = (value: string, cursor: number): void => {
+    const upto = value.slice(0, cursor)
+    const match = upto.match(/(^|\s)@([A-Za-z0-9_./\\-]*)$/)
+    if (!match) {
+      setMentions([])
+      setMentionStart(null)
+      return
+    }
+    const query = match[2] ?? ''
+    setMentionStart(upto.length - query.length - 1)
+    void window.localpilot
+      .searchWorkspaceFiles(query)
+      .then(setMentions)
+      .catch(() => setMentions([]))
+  }
+
+  const insertMention = (path: string): void => {
+    if (mentionStart == null) return
+    const cursor = inputRef.current?.selectionStart ?? draft.length
+    const next = `${draft.slice(0, mentionStart)}@${path} ${draft.slice(cursor)}`
+    setDraft(next)
+    setMentions([])
+    setMentionStart(null)
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
 
   const activeId = settings?.activeProviderId ?? ''
   const looksLikeCreate = /\b(create|build|scaffold|make|implement|generate|bootstrap|set\s*up)\b/i.test(
@@ -92,7 +120,7 @@ export function Composer({
     <div className="lp-composer-dock">
       <form
         onSubmit={onSubmit}
-        className="lp-composer"
+        className="lp-composer relative"
         onDragOver={(e) => {
           e.preventDefault()
           e.stopPropagation()
@@ -148,11 +176,32 @@ export function Composer({
         <label className="sr-only" htmlFor="lp-composer">
           Message
         </label>
+        {mentions.length > 0 && (
+          <ul className="absolute right-3 bottom-full left-3 z-10 mb-1 max-h-40 overflow-y-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] py-1 shadow-none">
+            {mentions.map((path) => (
+              <li key={path}>
+                <button
+                  type="button"
+                  className="block w-full truncate px-2.5 py-1 text-left font-[var(--font-mono)] text-[11px] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]"
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    insertMention(path)
+                  }}
+                >
+                  {path}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         <textarea
           id="lp-composer"
           ref={inputRef}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value)
+            syncMention(e.target.value, e.target.selectionStart ?? e.target.value.length)
+          }}
           onKeyDown={onKeyDown}
           rows={2}
           placeholder={

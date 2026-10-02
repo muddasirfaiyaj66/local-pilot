@@ -2,6 +2,22 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [0.15.0] — 2026-10-03
+
+### Added
+
+- Screenshots from the desktop and browser are sent to the model, and clicks are scaled to physical pixels on HiDPI displays
+- Review changes by hunk, with Keep and Undo per change, one checkpoint per Agent run, and Revert run
+- Plan steps show status, can be renamed, and Build switches to Agent and runs the plan
+- Type `@` in the composer to insert a workspace file; that file is included in the model prompt
+- Title bar shows the current tool and step, the sidebar shows a step line for running agents, and the context pane has a one-level file tree plus a click crosshair on the last screenshot
+- Settings can list models, edit MCP servers, and read recent audit entries
+- Shell commands that `cd` or redirect outside the workspace are blocked unless the run is already allowed outside
+
+### Changed
+
+- Layout is a 40px rail, 240px agent list, and 280px context pane
+
 ## [0.14.0] — 2026-10-03
 
 ### Added

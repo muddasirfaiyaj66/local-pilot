@@ -4,12 +4,15 @@ import {
   type AgentEventPayload,
   type AskResponse,
   type ChatChunkEvent,
+  type AuditRow,
   type LocalPilotApi,
+  type McpServerConfig,
   type PermissionResponse,
   type PersistedSessionsPayload,
   type ProviderUpsertInput,
   type RunningProcess,
-  type UpdateCheckResult
+  type UpdateCheckResult,
+  type WorkspaceTreeNode
 } from '../shared/ipc'
 import type { AgentStartRequest } from '../shared/agent'
 import type { AppSettings, ChatRequest, ProviderConfig, TestConnectionResult } from '../shared/types'
@@ -92,7 +95,23 @@ const api: LocalPilotApi = {
     }>,
   listProcesses: () => ipcRenderer.invoke(IpcChannels.procList) as Promise<RunningProcess[]>,
   stopProcess: (id: string) =>
-    ipcRenderer.invoke(IpcChannels.procStop, id) as Promise<{ ok: boolean }>
+    ipcRenderer.invoke(IpcChannels.procStop, id) as Promise<{ ok: boolean }>,
+  workspaceTree: () => ipcRenderer.invoke(IpcChannels.workspaceTree) as Promise<WorkspaceTreeNode[]>,
+  searchWorkspaceFiles: (query: string) =>
+    ipcRenderer.invoke(IpcChannels.workspaceSearchFiles, query) as Promise<string[]>,
+  readWorkspaceFile: (path: string) =>
+    ipcRenderer.invoke(IpcChannels.workspaceReadFile, path) as Promise<{
+      ok: boolean
+      text?: string
+      error?: string
+    }>,
+  listProviderModels: (providerId: string) =>
+    ipcRenderer.invoke(IpcChannels.providerModels, providerId) as Promise<string[]>,
+  getMcpConfig: () =>
+    ipcRenderer.invoke(IpcChannels.mcpGet) as Promise<{ servers: McpServerConfig[] }>,
+  saveMcpConfig: (config: { servers: McpServerConfig[] }) =>
+    ipcRenderer.invoke(IpcChannels.mcpSave, config) as Promise<{ ok: boolean; error?: string }>,
+  recentAudit: () => ipcRenderer.invoke(IpcChannels.auditRecent) as Promise<AuditRow[]>
 }
 
 contextBridge.exposeInMainWorld('localpilot', api)

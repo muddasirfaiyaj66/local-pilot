@@ -1,6 +1,7 @@
+import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
-import { isDeniedCommand, looksInteractive, shellTools } from './shell'
+import { commandLeavesWorkspace, isDeniedCommand, looksInteractive, shellTools } from './shell'
 
 describe('isDeniedCommand', () => {
   it('blocks destructive patterns', () => {
@@ -11,6 +12,25 @@ describe('isDeniedCommand', () => {
   it('allows normal commands', () => {
     expect(isDeniedCommand('npm test')).toBe(false)
     expect(isDeniedCommand('git status')).toBe(false)
+  })
+})
+
+describe('commandLeavesWorkspace', () => {
+  const root = resolve(join('tmp', 'localpilot-ws'))
+
+  it('allows commands that stay in the workspace', () => {
+    expect(commandLeavesWorkspace('npm test', root)).toBeNull()
+    expect(commandLeavesWorkspace('cd src && npm test', root)).toBeNull()
+  })
+
+  it('blocks cd that leaves the workspace', () => {
+    expect(commandLeavesWorkspace('cd', root)).toMatch(/home directory/)
+    expect(commandLeavesWorkspace('cd ..', root)).toMatch(/leaves the workspace/)
+  })
+
+  it('blocks absolute redirects outside the workspace', () => {
+    const outside = process.platform === 'win32' ? 'C:\\Windows\\Temp\\out.txt' : '/etc/lp-out.txt'
+    expect(commandLeavesWorkspace(`echo hi > "${outside}"`, root)).toMatch(/writes outside/)
   })
 })
 

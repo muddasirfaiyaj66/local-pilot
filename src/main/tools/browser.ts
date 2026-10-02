@@ -168,10 +168,13 @@ export const browserTools: RegisteredTool[] = [
     preview: () => 'Browser screenshot',
     execute: wrap(async () => {
       const b64 = await browserSession.screenshotBase64()
-      return okResult(`Screenshot captured (${Math.round(b64.length / 1024)} KB base64)`, {
-        mimeType: 'image/png',
-        data: b64.slice(0, 64) + '…'
-      })
+      return okResult(
+        `Screenshot captured (${Math.round(b64.length / 1024)} KB). A PNG is attached for vision.`,
+        {
+          mimeType: 'image/png',
+          imageBase64: b64
+        }
+      )
     })
   },
   {

@@ -62,6 +62,34 @@ export function isCreateBuildGoal(goal: string): boolean {
   return /\bvite\b/.test(lower) && /\b(create|build|scaffold|app|project|new)\b/.test(lower)
 }
 
+export type PlanPhase = 'start' | 'act' | 'verify' | 'done' | 'fail'
+
+/** Move heuristic steps forward as the run inspects, edits, and verifies. */
+export function withPlanProgress(plan: AgentPlan, phase: PlanPhase): AgentPlan {
+  const steps = plan.steps.map((step) => ({ ...step }))
+  const set = (index: number, status: AgentPlan['steps'][number]['status']): void => {
+    const step = steps[index]
+    if (step) steps[index] = { ...step, status }
+  }
+  if (phase === 'start') {
+    set(0, 'active')
+  } else if (phase === 'act') {
+    set(0, 'done')
+    if (steps.length > 1 && steps[1]?.status !== 'done') set(1, 'active')
+  } else if (phase === 'verify') {
+    for (let i = 0; i < steps.length - 1; i++) set(i, 'done')
+    set(steps.length - 1, 'active')
+  } else if (phase === 'done') {
+    for (let i = 0; i < steps.length; i++) {
+      if (steps[i]?.status !== 'failed') set(i, 'done')
+    }
+  } else {
+    const active = steps.findIndex((step) => step.status === 'active')
+    if (active >= 0) set(active, 'failed')
+  }
+  return { ...plan, steps }
+}
+
 /** Human-readable plan text for Plan-mode completion. */
 export function formatPlanSummary(plan: AgentPlan): string {
   const lines = plan.steps.map((s, i) => `${i + 1}. ${s.title}`)

@@ -1,7 +1,8 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { z } from 'zod'
 import { errResult, okResult, type RegisteredTool } from './types'
-import { resolveInWorkspace, WorkspaceError } from './workspace'
+import { isPathInside, resolveInWorkspace, WorkspaceError } from './workspace'
+import { isAbsolute, resolve } from 'node:path'
 
 const RunArgs = z.object({
   command: z.string().min(1),
@@ -22,6 +23,46 @@ const DENY_PATTERNS: RegExp[] = [
 
 export function isDeniedCommand(command: string): boolean {
   return DENY_PATTERNS.some((re) => re.test(command))
+}
+
+function unquote(token: string): string {
+  const trimmed = token.trim()
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1)
+  }
+  return trimmed
+}
+
+/**
+ * Best-effort block for commands that cd or redirect outside the workspace.
+ * The shell still starts in the workspace; this rejects obvious escapes.
+ */
+export function commandLeavesWorkspace(command: string, workspacePath: string): string | null {
+  const root = resolve(workspacePath)
+  let cwd = root
+  const parts = command.split(/\s*(?:&&|\|\||;)\s*/)
+  for (const part of parts) {
+    const cd = part.match(/^\s*(?:cd|chdir|Set-Location|sl)\s*(.*)$/i)
+    if (cd) {
+      const raw = unquote(cd[1] ?? '')
+      if (!raw) return 'Command leaves the workspace: cd with no path goes to the home directory'
+      const next = isAbsolute(raw) ? resolve(raw) : resolve(cwd, raw)
+      if (!isPathInside(root, next)) return `Command leaves the workspace: ${part.trim()}`
+      cwd = next
+    }
+    const redirects = part.matchAll(/(?:>>?)\s*(?:"([^"]+)"|'([^']+)'|([^\s&|;]+))/g)
+    for (const match of redirects) {
+      const target = match[1] || match[2] || match[3] || ''
+      if (!target || !isAbsolute(target)) continue
+      if (!isPathInside(root, resolve(target))) {
+        return `Command writes outside the workspace: ${target}`
+      }
+    }
+  }
+  return null
 }
 
 /** Kill a command and its children. On Windows, child.kill() leaves the process tree running. */
@@ -113,6 +154,8 @@ export const shellTools: RegisteredTool[] = [
         if (isDeniedCommand(args.command)) {
           return errResult('Command blocked by deny list (destructive pattern)')
         }
+        const escape = commandLeavesWorkspace(args.command, ctx.workspacePath)
+        if (escape && !ctx.allowOutsideWorkspace) return errResult(escape)
 
         let cwd: string
         try {

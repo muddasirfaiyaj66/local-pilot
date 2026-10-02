@@ -14,7 +14,10 @@ import {
 import { loadSessions, saveSessions, type PersistedSessions } from '../agent/memory'
 import { runAgentLoop } from '../agent/loop'
 import { createProvider } from '../providers/registry'
+import { readRecentAudit } from '../safety/audit'
 import type { SettingsStore } from '../settings'
+import { listWorkspaceTree, readWorkspaceText, searchWorkspaceFiles } from '../tools/browse'
+import { readMcpConfig, writeMcpConfig } from '../tools/mcp'
 import { restoreWorkspaceFile } from '../tools/restore'
 
 const activeStreams = new Map<string, AbortController>()
@@ -103,6 +106,61 @@ export function registerIpcHandlers(store: SettingsStore): void {
     const { stopProcess } = await import('../tools/process')
     return { ok: stopProcess(id) }
   })
+  ipcMain.handle(IpcChannels.workspaceTree, () => {
+    const workspace = store.getSettings().workspacePath
+    if (!workspace.trim()) return []
+    try {
+      return listWorkspaceTree(workspace)
+    } catch {
+      return []
+    }
+  })
+  ipcMain.handle(IpcChannels.workspaceSearchFiles, (_e, query: string) => {
+    const workspace = store.getSettings().workspacePath
+    if (!workspace.trim()) return []
+    try {
+      return searchWorkspaceFiles(workspace, String(query ?? ''))
+    } catch {
+      return []
+    }
+  })
+  ipcMain.handle(IpcChannels.workspaceReadFile, (_e, filePath: string) => {
+    try {
+      const workspace = store.getSettings().workspacePath
+      return { ok: true, text: readWorkspaceText(workspace, filePath) }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+  ipcMain.handle(IpcChannels.providerModels, async (_e, providerId: string) => {
+    const providerConfig = store.getProvider(providerId)
+    if (!providerConfig) return []
+    try {
+      const provider = createProvider(providerConfig, store.getApiKey(providerId))
+      return await provider.listModels()
+    } catch {
+      return []
+    }
+  })
+  ipcMain.handle(IpcChannels.mcpGet, () => readMcpConfig())
+  ipcMain.handle(IpcChannels.mcpSave, (_e, raw: unknown) => {
+    try {
+      writeMcpConfig(raw)
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+  ipcMain.handle(IpcChannels.auditRecent, () =>
+    readRecentAudit(40).map((entry) => ({
+      timestamp: entry.timestamp,
+      toolName: entry.toolName,
+      risk: entry.risk,
+      preview: entry.preview.slice(0, 180),
+      ok: entry.ok,
+      detail: entry.detail
+    }))
+  )
   ipcMain.removeHandler(IpcChannels.dialogOpenFolder)
   ipcMain.handle(IpcChannels.dialogOpenFolder, async (event): Promise<string | null> => {
     try {

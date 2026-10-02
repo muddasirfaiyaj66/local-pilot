@@ -58,6 +58,8 @@ export default function App(): React.JSX.Element {
   const attachments = useAppStore((s) => s.attachments)
   const interactionMode = useAppStore((s) => s.interactionMode)
   const setView = useAppStore((s) => s.setView)
+  const timeline = useAppStore((s) => s.timeline)
+  const maxSteps = useAppStore((s) => s.settings?.maxAgentSteps ?? 60)
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -102,6 +104,10 @@ export default function App(): React.JSX.Element {
 
   const modeLabel =
     interactionMode === 'plan' ? 'Plan' : interactionMode === 'agent' ? 'Agent' : 'Chat'
+  const toolSteps = timeline.filter((entry) => entry.kind === 'tool')
+  const statusLine = isStreaming
+    ? `${toolSteps[toolSteps.length - 1]?.text.split(' ')[0] ?? 'Thinking'} · step ${toolSteps.length}/${maxSteps}`
+    : null
 
   return (
     <div className="flex h-full bg-[var(--color-bg)]">
@@ -155,6 +161,11 @@ export default function App(): React.JSX.Element {
                 {modeLabel}
               </span>
               <RunningAgentsBadge />
+              {statusLine ? (
+                <span className="truncate font-[var(--font-mono)] text-[10px] text-[var(--color-text-faint)]">
+                  {statusLine}
+                </span>
+              ) : null}
               <div className="flex-1" />
               <RunningServersChip />
               <WorkspaceChip />

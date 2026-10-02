@@ -1,9 +1,16 @@
 import { FolderOpen, WarningCircle } from '@phosphor-icons/react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../store/appStore'
 import { AgentActivity } from './AgentActivity'
 import { Markdown } from './Markdown'
+import { Button } from './ui/Button'
 import logoMark from '../assets/logo-mark.svg'
+
+const EXAMPLE_CHIPS = [
+  'Edit the main file and fix the first bug you find',
+  'Run the app and tell me the localhost URL',
+  'Open https://example.com and summarize the page'
+]
 
 export function MessageList(): React.JSX.Element {
   const messages = useAppStore((s) => s.messages)
@@ -18,6 +25,10 @@ export function MessageList(): React.JSX.Element {
   const timeline = useAppStore((s) => s.timeline)
   const bottomRef = useRef<HTMLDivElement>(null)
   const hasWorkspace = Boolean(settings?.workspacePath?.trim())
+  const sendMessage = useAppStore((s) => s.sendMessage)
+  const setInteractionMode = useAppStore((s) => s.setInteractionMode)
+  const updatePlanStep = useAppStore((s) => s.updatePlanStep)
+  const [editingStep, setEditingStep] = useState<string | null>(null)
 
   const lastTimeline = timeline[timeline.length - 1]
   const agentBusyLabel = pendingPermission
@@ -56,6 +67,20 @@ export function MessageList(): React.JSX.Element {
                 Open Folder
               </button>
             )}
+            {hasWorkspace && (
+              <div className="mt-5 flex max-w-[420px] flex-wrap justify-center gap-2">
+                {EXAMPLE_CHIPS.map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    className="rounded-full border border-[var(--color-border)] px-3 py-1 text-left text-[11px] text-[var(--color-text-muted)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
+                    onClick={() => void sendMessage(chip)}
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -69,14 +94,59 @@ export function MessageList(): React.JSX.Element {
             </summary>
             <ol className="mt-2 space-y-1.5 border-t border-[var(--color-border)] pt-2">
               {plan.steps.map((step, i) => (
-                <li key={step.id} className="flex gap-2 text-[12px] text-[var(--color-text-muted)]">
+                <li key={step.id} className="flex items-start gap-2 text-[12px] text-[var(--color-text-muted)]">
+                  <span
+                    className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${
+                      step.status === 'done'
+                        ? 'bg-[var(--color-ok)]'
+                        : step.status === 'active'
+                          ? 'bg-[var(--color-accent)]'
+                          : step.status === 'failed'
+                            ? 'bg-[var(--color-danger)]'
+                            : 'bg-[var(--color-text-faint)]'
+                    }`}
+                    title={step.status}
+                  />
                   <span className="w-4 shrink-0 font-[var(--font-mono)] text-[10px] text-[var(--color-text-faint)]">
                     {i + 1}.
                   </span>
-                  <span className="text-[var(--color-text)]">{step.title}</span>
+                  {editingStep === step.id ? (
+                    <input
+                      className="lp-input !py-0.5 text-[12px]"
+                      defaultValue={step.title}
+                      autoFocus
+                      onBlur={(e) => {
+                        updatePlanStep(step.id, e.target.value)
+                        setEditingStep(null)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="text-left text-[var(--color-text)]"
+                      onClick={() => setEditingStep(step.id)}
+                    >
+                      {step.title}
+                    </button>
+                  )}
                 </li>
               ))}
             </ol>
+            <div className="mt-2">
+              <Button
+                variant="accent"
+                onClick={() => {
+                  setInteractionMode('agent')
+                  const text = plan.steps.map((step, i) => `${i + 1}. ${step.title}`).join('\n')
+                  void sendMessage(`Execute this plan:\n${text}`)
+                }}
+              >
+                Build
+              </Button>
+            </div>
           </details>
         )}
 

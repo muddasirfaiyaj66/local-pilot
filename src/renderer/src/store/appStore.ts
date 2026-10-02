@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { AgentPlan, PermissionRequest } from '@shared/agent'
 import { contextLimitForModel } from '@shared/context'
+import { diffHunks, keepHunk, undoHunk } from '@shared/diff'
 import type { PersistedSessionsPayload, RunningProcess } from '@shared/ipc'
 import type {
   AppSettings,
@@ -10,6 +11,25 @@ import type {
   ProviderConfig,
   TestConnectionResult
 } from '@shared/types'
+
+async function expandFileMentions(content: string): Promise<string> {
+  const refs = [...content.matchAll(/(^|\s)@([A-Za-z0-9_./\\-]+)/g)].map((match) => match[2]!)
+  if (refs.length === 0 || !window.localpilot?.readWorkspaceFile) return content
+  const notes: string[] = []
+  for (const rel of refs.slice(0, 4)) {
+    try {
+      const result = await window.localpilot.readWorkspaceFile(rel)
+      notes.push(
+        result.ok && result.text
+          ? `[Referenced file: ${rel}]\n\`\`\`\n${result.text.slice(0, 8_000)}\n\`\`\``
+          : `[Referenced file: ${rel}]`
+      )
+    } catch {
+      notes.push(`[Referenced file: ${rel}]`)
+    }
+  }
+  return [content, ...notes].join('\n\n')
+}
 
 function newId(): string {
   return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
@@ -52,6 +72,24 @@ export interface PendingFileChange {
   created?: boolean
 }
 
+export interface RunCheckpoint {
+  goal: string
+  at: number
+}
+
+export interface VisionFrame {
+  dataUrl: string
+  width: number
+  height: number
+}
+
+export interface VisionClick {
+  x: number
+  y: number
+  imageWidth?: number
+  imageHeight?: number
+}
+
 export interface TokenUsage {
   promptTokens: number
   completionTokens: number
@@ -75,6 +113,7 @@ interface TaskSession {
   timeline: TimelineEntry[]
   pendingChanges: PendingFileChange[]
   usage: TokenUsage | null
+  checkpoint: RunCheckpoint | null
   run: TaskRun
 }
 
@@ -103,6 +142,9 @@ interface AppState {
   attachments: PendingAttachment[]
   pendingChanges: PendingFileChange[]
   usage: TokenUsage | null
+  checkpoint: RunCheckpoint | null
+  visionFrame: VisionFrame | null
+  visionClick: VisionClick | null
   /** Dev server URL detected from a background process, shown in the preview pane */
   previewUrl: string | null
   setPreviewUrl: (url: string | null) => void
@@ -134,6 +176,8 @@ interface AppState {
   rejectChange: (id: string) => Promise<void>
   acceptAllChanges: () => void
   rejectAllChanges: () => Promise<void>
+  applyHunk: (changeId: string, hunkIndex: number, decision: 'keep' | 'undo') => Promise<void>
+  updatePlanStep: (id: string, title: string) => void
   sendMessage: (text: string) => Promise<void>
   stopStreaming: () => Promise<void>
   stopTask: (taskId: string) => Promise<void>
@@ -159,6 +203,7 @@ const emptySession = (): TaskSession => ({
   timeline: [],
   pendingChanges: [],
   usage: null,
+  checkpoint: null,
   run: emptyRun()
 })
 
@@ -173,6 +218,7 @@ function snapshotActive(s: AppState): TaskSession | null {
     timeline: s.timeline,
     pendingChanges: s.pendingChanges,
     usage: s.usage,
+    checkpoint: s.checkpoint,
     run: {
       requestId: s.activeRequestId,
       kind: frozenRunKind(s),
@@ -271,6 +317,8 @@ function sanitizeSession(raw: unknown): TaskSession {
     timeline: Array.isArray(session.timeline) ? session.timeline : [],
     pendingChanges: Array.isArray(session.pendingChanges) ? session.pendingChanges : [],
     usage: session.usage ?? null,
+    checkpoint:
+      session.checkpoint && typeof session.checkpoint.goal === 'string' ? session.checkpoint : null,
     run: emptyRun()
   }
 }
@@ -282,6 +330,7 @@ function hydrateFromSession(session: TaskSession): Partial<AppState> {
     timeline: session.timeline,
     pendingChanges: session.pendingChanges,
     usage: session.usage,
+    checkpoint: session.checkpoint,
     streamingText: session.run.streamingText,
     isStreaming: session.run.isStreaming,
     activeRequestId: session.run.requestId,
@@ -436,6 +485,27 @@ function bindGlobalListeners(get: Get, set: Set): void {
       if (event.result.ok && typeof event.result.meta?.previewUrl === 'string') {
         set({ previewUrl: event.result.meta.previewUrl })
       }
+      const meta = event.result.meta
+      if (meta && typeof meta.imageBase64 === 'string' && meta.imageBase64.length > 32) {
+        const mime = typeof meta.mimeType === 'string' ? meta.mimeType : 'image/png'
+        set({
+          visionFrame: {
+            dataUrl: `data:${mime};base64,${meta.imageBase64}`,
+            width: typeof meta.width === 'number' ? meta.width : 0,
+            height: typeof meta.height === 'number' ? meta.height : 0
+          }
+        })
+      }
+      if (meta && typeof meta.clickX === 'number' && typeof meta.clickY === 'number') {
+        set({
+          visionClick: {
+            x: meta.clickX,
+            y: meta.clickY,
+            imageWidth: typeof meta.imageWidth === 'number' ? meta.imageWidth : undefined,
+            imageHeight: typeof meta.imageHeight === 'number' ? meta.imageHeight : undefined
+          }
+        })
+      }
       if (event.result.meta?.processId) {
         void get().refreshProcesses()
       }
@@ -557,6 +627,9 @@ export const useAppStore = create<AppState>((set, get) => {
   attachments: [],
   pendingChanges: [],
   usage: null,
+  checkpoint: null,
+  visionFrame: null,
+  visionClick: null,
   previewUrl: null,
   processes: [],
 
@@ -746,7 +819,7 @@ export const useAppStore = create<AppState>((set, get) => {
   },
 
   acceptAllChanges: () => {
-    set({ pendingChanges: [] })
+    set({ pendingChanges: [], checkpoint: null })
     persistActive(get, set)
   },
 
@@ -763,7 +836,61 @@ export const useAppStore = create<AppState>((set, get) => {
     }
     set((s) => ({
       pendingChanges: s.pendingChanges.filter((c) => failedIds.has(c.id)),
+      checkpoint: failedIds.size > 0 ? s.checkpoint : null,
       error: errors.length > 0 ? `Could not undo: ${errors.join('; ')}` : s.error
+    }))
+    persistActive(get, set)
+  },
+
+  applyHunk: async (changeId, hunkIndex, decision) => {
+    const change = get().pendingChanges.find((item) => item.id === changeId)
+    if (!change) return
+    const hunks = diffHunks(change.before, change.after)
+    const hunk = hunks[hunkIndex]
+    if (!hunk) return
+    if (decision === 'undo') {
+      const after = undoHunk(change.after, hunk)
+      const result = await window.localpilot.restoreFile(
+        change.path,
+        after,
+        change.created === true && after === ''
+      )
+      if (!result.ok) {
+        set({ error: result.error ?? 'Failed to undo hunk' })
+        return
+      }
+      set((s) => ({
+        pendingChanges:
+          after === change.before
+            ? s.pendingChanges.filter((item) => item.id !== changeId)
+            : s.pendingChanges.map((item) => (item.id === changeId ? { ...item, after } : item)),
+        checkpoint:
+          after === change.before && s.pendingChanges.length === 1 ? null : s.checkpoint
+      }))
+    } else {
+      const before = keepHunk(change.before, hunk)
+      set((s) => ({
+        pendingChanges:
+          before === change.after
+            ? s.pendingChanges.filter((item) => item.id !== changeId)
+            : s.pendingChanges.map((item) => (item.id === changeId ? { ...item, before } : item)),
+        checkpoint:
+          before === change.after && s.pendingChanges.length === 1 ? null : s.checkpoint
+      }))
+    }
+    persistActive(get, set)
+  },
+
+  updatePlanStep: (id, title) => {
+    const nextTitle = title.trim()
+    if (!nextTitle) return
+    set((s) => ({
+      plan: s.plan
+        ? {
+            ...s.plan,
+            steps: s.plan.steps.map((step) => (step.id === id ? { ...step, title: nextTitle } : step))
+          }
+        : s.plan
     }))
     persistActive(get, set)
   },
@@ -880,6 +1007,8 @@ export const useAppStore = create<AppState>((set, get) => {
       .join('\n\n')
 
     const content = [trimmed, fileNotes].filter(Boolean).join('\n\n')
+    const modelContent =
+      interactionMode === 'chat' ? content : await expandFileMentions(content || trimmed)
 
     const userMsg: ChatMessage = {
       id: newId(),
@@ -920,7 +1049,11 @@ export const useAppStore = create<AppState>((set, get) => {
         totalTokens: estPrompt,
         contextLimit: limit,
         estimated: true
-      }
+      },
+      checkpoint:
+        interactionMode === 'agent'
+          ? { goal: (trimmed || attachments[0]?.name || 'Agent run').slice(0, 80), at: Date.now() }
+          : s.checkpoint
     }))
     persistActive(get, set)
 
@@ -954,14 +1087,14 @@ export const useAppStore = create<AppState>((set, get) => {
       } else {
         const history = get().messages
           .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((m) => ({
+          .map((m, index, all) => ({
             role: m.role,
-            content: m.content,
+            content: index === all.length - 1 && m.role === 'user' ? modelContent || m.content : m.content,
             images: m.images
           }))
         const { requestId } = await window.localpilot.startAgent({
           providerId,
-          goal: content || trimmed,
+          goal: modelContent || content || trimmed,
           mode: interactionMode === 'plan' ? 'plan' : 'agent',
           messages: history,
           // Agent runs use the configured budget from settings.

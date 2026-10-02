@@ -1,6 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 import { z } from 'zod'
@@ -31,6 +31,12 @@ function mcpConfigPath(): string {
   } catch {
     return join(process.cwd(), 'mcp.json')
   }
+}
+
+export function writeMcpConfig(raw: unknown): z.infer<typeof McpConfigSchema> {
+  const config = McpConfigSchema.parse(raw)
+  writeFileSync(mcpConfigPath(), JSON.stringify(config, null, 2), 'utf8')
+  return config
 }
 
 export function readMcpConfig(): z.infer<typeof McpConfigSchema> {

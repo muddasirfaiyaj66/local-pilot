@@ -7,9 +7,10 @@ import {
   Stop
 } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
-import { useAppStore } from '../store/appStore'
+import { useAppStore, type VisionClick, type VisionFrame } from '../store/appStore'
+import type { WorkspaceTreeNode } from '@shared/ipc'
 
-type Tab = 'app' | 'screen' | 'log'
+type Tab = 'app' | 'screen' | 'log' | 'files'
 
 export function LivePreviewPane(): React.JSX.Element {
   const timeline = useAppStore((s) => s.timeline)
@@ -27,10 +28,18 @@ export function LivePreviewPane(): React.JSX.Element {
     null
   )
   const [previewError, setPreviewError] = useState<string | null>(null)
+  const visionFrame = useAppStore((s) => s.visionFrame)
+  const visionClick = useAppStore((s) => s.visionClick)
+  const [tree, setTree] = useState<WorkspaceTreeNode[]>([])
   const workspace = settings?.workspacePath?.trim()
   const folderName = workspace
     ? workspace.replace(/\\/g, '/').split('/').filter(Boolean).pop()
     : null
+
+  useEffect(() => {
+    if (tab !== 'files' || !workspace) return
+    void window.localpilot.workspaceTree().then(setTree).catch(() => setTree([]))
+  }, [tab, workspace])
 
   // Jump to the app as soon as a dev server URL shows up.
   useEffect(() => {
@@ -100,6 +109,13 @@ export function LivePreviewPane(): React.JSX.Element {
         >
           <ListBullets size={12} aria-hidden />
           Log
+        </button>
+        <button
+          type="button"
+          className={tab === 'files' ? 'lp-context-tab is-active' : 'lp-context-tab'}
+          onClick={() => setTab('files')}
+        >
+          Files
         </button>
         <div className="flex-1" />
         {folderName ? (
@@ -189,12 +205,15 @@ export function LivePreviewPane(): React.JSX.Element {
       ) : tab === 'screen' ? (
         <div className="flex min-h-0 flex-1 flex-col p-2.5">
           <div className="relative min-h-0 flex-1 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]">
-            {preview ? (
-              <img
-                src={preview.dataUrl}
-                alt="Screen preview"
-                className="h-full w-full object-contain"
-              />
+            {visionFrame || preview ? (
+              <>
+                <img
+                  src={(visionFrame ?? preview)!.dataUrl}
+                  alt={visionFrame ? 'Frame sent to the model' : 'Screen preview'}
+                  className="h-full w-full object-contain"
+                />
+                <ClickCrosshair frame={visionFrame} click={visionClick} />
+              </>
             ) : (
               <div className="flex h-full min-h-[140px] items-center justify-center px-3 text-center text-[11px] text-[var(--color-text-faint)]">
                 {previewError ?? 'Screen preview'}
@@ -219,6 +238,27 @@ export function LivePreviewPane(): React.JSX.Element {
             Refresh
           </button>
         </div>
+      ) : tab === 'files' ? (
+        <ul className="min-h-0 flex-1 overflow-y-auto p-2 font-[var(--font-mono)] text-[11px] text-[var(--color-text-muted)]">
+          {tree.length === 0 ? (
+            <li className="px-1 py-3 text-[var(--color-text-faint)]">Open a folder to see its files.</li>
+          ) : (
+            tree.map((node) => (
+              <li key={node.name} className="mb-1">
+                <div className="text-[var(--color-text)]">
+                  {node.name}
+                  {node.dir ? '/' : ''}
+                </div>
+                {node.children?.map((child) => (
+                  <div key={child.name} className="pl-3 text-[var(--color-text-faint)]">
+                    {child.name}
+                    {child.dir ? '/' : ''}
+                  </div>
+                ))}
+              </li>
+            ))
+          )}
+        </ul>
       ) : (
         <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
           {timeline.length === 0 && (
@@ -239,5 +279,27 @@ export function LivePreviewPane(): React.JSX.Element {
         </ul>
       )}
     </aside>
+  )
+}
+
+function ClickCrosshair({
+  frame,
+  click
+}: {
+  frame: VisionFrame | null
+  click: VisionClick | null
+}): React.JSX.Element | null {
+  if (!frame || !click) return null
+  const width = click.imageWidth || frame.width
+  const height = click.imageHeight || frame.height
+  if (!width || !height) return null
+  const left = `${Math.min(100, Math.max(0, (click.x / width) * 100))}%`
+  const top = `${Math.min(100, Math.max(0, (click.y / height) * 100))}%`
+  return (
+    <span
+      className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[var(--color-accent)]"
+      style={{ left, top }}
+      title="Last click"
+    />
   )
 }

@@ -35,6 +35,29 @@ const ScrollArgs = z.object({
   dx: z.number().default(0)
 })
 
+/** Map screenshot or DIP coordinates onto physical pixels for nut.js. */
+export function scaleToPhysical(
+  x: number,
+  y: number,
+  dipWidth: number,
+  dipHeight: number,
+  scaleFactor: number,
+  imageWidth?: number,
+  imageHeight?: number
+): { x: number; y: number } {
+  const factor = scaleFactor > 0 ? scaleFactor : 1
+  const physW = Math.round(dipWidth * factor)
+  const physH = Math.round(dipHeight * factor)
+  if (imageWidth && imageHeight && imageWidth > 0 && imageHeight > 0) {
+    return {
+      x: Math.round((x / imageWidth) * physW),
+      y: Math.round((y / imageHeight) * physH)
+    }
+  }
+  if (x > dipWidth || y > dipHeight) return { x: Math.round(x), y: Math.round(y) }
+  return { x: Math.round(x * factor), y: Math.round(y * factor) }
+}
+
 function scalePoint(
   x: number,
   y: number,
@@ -42,23 +65,15 @@ function scalePoint(
   imageHeight?: number
 ): { x: number; y: number } {
   const display = electronScreen.getPrimaryDisplay()
-  const { width, height } = display.size
-  const factor = display.scaleFactor || 1
-  // Logical size for mouse APIs is typically size (DIP); nut.js often wants screen coords
-  const screenW = width
-  const screenH = height
-
-  if (imageWidth && imageHeight) {
-    return {
-      x: Math.round((x / imageWidth) * screenW),
-      y: Math.round((y / imageHeight) * screenH)
-    }
-  }
-  // If model returns physical pixels, divide by scaleFactor
-  return {
-    x: Math.round(x / (factor > 1 && x > screenW ? factor : 1)),
-    y: Math.round(y / (factor > 1 && y > screenH ? factor : 1))
-  }
+  return scaleToPhysical(
+    x,
+    y,
+    display.size.width,
+    display.size.height,
+    display.scaleFactor || 1,
+    imageWidth,
+    imageHeight
+  )
 }
 
 const KEY_MAP: Record<string, Key> = {
@@ -137,7 +152,7 @@ export const screenTools: RegisteredTool[] = [
   {
     name: 'screen_screenshot',
     description:
-      'Capture the primary screen (downscaled). Returns size metadata for vision grounding coordinates.',
+      'Capture the primary screen. The image is attached for vision models. Click coordinates must use this image size.',
     risk: 'safe',
     timeoutMs: 15_000,
     parameters: z.object({}),
@@ -146,14 +161,13 @@ export const screenTools: RegisteredTool[] = [
     execute: wrap(async () => {
       const shot = await captureScreenPng()
       return okResult(
-        `Screenshot ${shot.width}x${shot.height} (scaleFactor=${shot.scaleFactor}). Use these dimensions when grounding click coordinates.`,
+        `Screenshot ${shot.width}x${shot.height} (scaleFactor=${shot.scaleFactor}). A PNG is attached. Click with x,y in this image plus imageWidth=${shot.width} and imageHeight=${shot.height}.`,
         {
           width: shot.width,
           height: shot.height,
           scaleFactor: shot.scaleFactor,
           mimeType: 'image/png',
-          // Keep meta small in tool result text path; live preview uses dedicated IPC
-          bytes: Math.round(shot.base64.length * 0.75)
+          imageBase64: shot.base64
         }
       )
     })
@@ -181,7 +195,14 @@ export const screenTools: RegisteredTool[] = [
       const p = scalePoint(args.x, args.y, args.imageWidth, args.imageHeight)
       await mouse.setPosition(new Point(p.x, p.y))
       await mouse.click(Button.LEFT)
-      return okResult(`Clicked at ${p.x},${p.y}`)
+      return okResult(`Clicked at ${p.x},${p.y}`, {
+        clickX: args.x,
+        clickY: args.y,
+        imageWidth: args.imageWidth,
+        imageHeight: args.imageHeight,
+        physicalX: p.x,
+        physicalY: p.y
+      })
     })
   },
   {
@@ -364,8 +385,9 @@ export const screenTools: RegisteredTool[] = [
       const display =
         electronScreen.getAllDisplays().find((d) => d.id === displayId) ??
         electronScreen.getPrimaryDisplay()
-      const x = display.bounds.x + Math.floor(display.bounds.width / 2)
-      const y = display.bounds.y + Math.floor(display.bounds.height / 2)
+      const factor = display.scaleFactor || 1
+      const x = Math.round(display.bounds.x * factor + (display.bounds.width * factor) / 2)
+      const y = Math.round(display.bounds.y * factor + (display.bounds.height * factor) / 2)
       await mouse.setPosition(new Point(x, y))
       await mouse.click(Button.LEFT)
       return okResult(`Focused display ${display.id} at ${x},${y}`)

@@ -1,5 +1,11 @@
 import { CircleNotch, Plus, Stop, Trash } from '@phosphor-icons/react'
-import { useAppStore } from '../store/appStore'
+import { useAppStore, type TimelineEntry } from '../store/appStore'
+
+function stepLine(timeline: TimelineEntry[]): string {
+  const tools = timeline.filter((entry) => entry.kind === 'tool')
+  const last = tools[tools.length - 1]?.text.split(' ')[0] ?? 'working'
+  return `${last} · step ${Math.max(tools.length, 1)}`
+}
 
 export function TaskSidebar(): React.JSX.Element {
   const tasks = useAppStore((s) => s.tasks)
@@ -14,7 +20,7 @@ export function TaskSidebar(): React.JSX.Element {
 
   return (
     <aside
-      className="flex w-[200px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]"
+      className="flex w-[240px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]"
       aria-label="Agents"
     >
       <div className="flex h-8 items-center justify-between px-2.5">
@@ -82,6 +88,11 @@ export function TaskSidebar(): React.JSX.Element {
                   ) : null}
                   <span className="truncate text-[12px]">{task.title}</span>
                 </div>
+                {running ? (
+                  <div className="mt-0.5 truncate pl-[18px] font-[var(--font-mono)] text-[10px] text-[var(--color-text-faint)]">
+                    {stepLine(sessions[task.id]?.timeline ?? [])}
+                  </div>
+                ) : null}
               </button>
               <div className="absolute top-0.5 right-0.5 flex items-center">
                 {running ? (
