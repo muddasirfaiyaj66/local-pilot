@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { mergeEditedPlanTitles, type AgentPlan, type PermissionRequest } from '@shared/agent'
 import { contextLimitForModel } from '@shared/context'
 import { diffHunks, keepHunk, undoHunk } from '@shared/diff'
+import { routedProviderId } from './modelRouting'
 import type { PersistedSessionsPayload, RunningProcess } from '@shared/ipc'
 import type {
   AppSettings,
@@ -167,6 +168,9 @@ interface AppState {
   setPermissionMode: (mode: PermissionMode) => Promise<void>
   setMaxAgentSteps: (steps: number) => Promise<void>
   setActiveProvider: (id: string) => Promise<void>
+  setModelRouting: (routing: AppSettings['modelRouting']) => Promise<void>
+  saveWorkflow: (name: string, steps: string[], id?: string) => Promise<void>
+  deleteWorkflow: (id: string) => Promise<void>
   openWorkspace: () => Promise<void>
   setWorkspacePath: (path: string) => Promise<void>
   clearWorkspace: () => Promise<void>
@@ -722,6 +726,26 @@ export const useAppStore = create<AppState>((set, get) => {
     set({ settings })
   },
 
+  setModelRouting: async (modelRouting) => {
+    const settings = await window.localpilot.setSettings({ modelRouting })
+    set({ settings })
+  },
+
+  saveWorkflow: async (name, steps, id) => {
+    const settings = get().settings
+    if (!settings) return
+    const workflow = { id: id ?? newId(), name: name.trim(), steps: steps.map((s) => s.trim()).filter(Boolean) }
+    if (!workflow.name || workflow.steps.length === 0) return
+    const workflows = [...settings.workflows.filter((w) => w.id !== workflow.id), workflow]
+    set({ settings: await window.localpilot.setSettings({ workflows }) })
+  },
+
+  deleteWorkflow: async (id) => {
+    const settings = get().settings
+    if (!settings) return
+    set({ settings: await window.localpilot.setSettings({ workflows: settings.workflows.filter((w) => w.id !== id) }) })
+  },
+
   openWorkspace: async () => {
     try {
       if (typeof window.localpilot?.openFolder !== 'function') {
@@ -1014,9 +1038,11 @@ export const useAppStore = create<AppState>((set, get) => {
     if ((!trimmed && attachments.length === 0) || get().isStreaming) return
 
     const { settings, providers, interactionMode } = get()
-    const providerId = settings?.activeProviderId ?? providers[0]?.id
+    const providerId = routedProviderId(settings, providers, trimmed, attachments.some((a) => a.kind === 'image'), interactionMode)
     if (!providerId) {
-      set({ error: 'No provider configured. Open Settings to add one.' })
+      set({ error: attachments.some((a) => a.kind === 'image') && settings?.modelRouting.enabled
+        ? 'No enabled vision model is available. Configure one in Model routing.'
+        : 'No provider configured. Open Settings to add one.' })
       return
     }
 

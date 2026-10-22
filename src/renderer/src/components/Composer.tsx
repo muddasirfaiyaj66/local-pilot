@@ -3,6 +3,8 @@ import { useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } 
 import { useAppStore, type InteractionMode } from '../store/appStore'
 import type { PermissionMode } from '@shared/types'
 import { ContextMeter } from './ContextMeter'
+import { WorkflowControls } from './WorkflowControls'
+import { ModelRoutingControls } from './ModelRoutingControls'
 
 const MODES: { id: PermissionMode; label: string }[] = [
   { id: 'ask-every-time', label: 'Ask always' },
@@ -68,6 +70,7 @@ export function Composer({
   const addAttachment = useAppStore((s) => s.addAttachment)
   const removeAttachment = useAppStore((s) => s.removeAttachment)
   const setActiveProvider = useAppStore((s) => s.setActiveProvider)
+  const setModelRouting = useAppStore((s) => s.setModelRouting)
   const setPermissionMode = useAppStore((s) => s.setPermissionMode)
   const stopStreaming = useAppStore((s) => s.stopStreaming)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -215,6 +218,8 @@ export function Composer({
         />
 
         <div className="lp-composer-toolbar">
+          <WorkflowControls draft={draft} setDraft={setDraft} />
+          <ModelRoutingControls draft={draft} />
           <div className="lp-chip">
             <select
               aria-label="Interaction mode"
@@ -232,7 +237,13 @@ export function Composer({
             <select
               aria-label="Model provider"
               value={activeId}
-              onChange={(e) => void setActiveProvider(e.target.value)}
+              onChange={(e) => {
+                const id = e.target.value
+                void (async () => {
+                  await setActiveProvider(id)
+                  if (settings?.modelRouting.enabled) await setModelRouting({ ...settings.modelRouting, enabled: false })
+                })()
+              }}
               className="lp-select max-w-[160px] truncate"
             >
               {providers.map((p) => (

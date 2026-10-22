@@ -89,6 +89,17 @@ export const AppSettingsSchema = z.object({
   activeProviderId: z.string().nullable().default(null),
   /** Tool calls an Agent run may make before it stops and summarises. */
   maxAgentSteps: z.number().int().min(5).max(200).default(60),
+  modelRouting: z.object({
+    enabled: z.boolean().default(false),
+    fastProviderId: z.string().default(''),
+    strongProviderId: z.string().default(''),
+    visionProviderId: z.string().default('')
+  }).default({}),
+  workflows: z.array(z.object({
+    id: z.string(),
+    name: z.string().min(1).max(80),
+    steps: z.array(z.string().min(1).max(500)).min(1).max(20)
+  })).default([]),
   providers: z.array(ProviderConfigSchema).default([])
 })
 export type AppSettings = z.infer<typeof AppSettingsSchema>

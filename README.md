@@ -31,6 +31,8 @@ LocalPilot is an Electron desktop app that pairs a chat UI with an agent loop. Y
 - **MCP** — stdio servers from `mcp.json` in app userData; `mcp_reload` refreshes tools
 - **Memory** — SQLite notes (`memory_*`) and task history (`node:sqlite`)
 - **Diff review** — Keep / Undo for agent file changes; attachments; context/token meter
+- **Reusable workflows** — save a goal or plan as named, editable steps and load it into the composer for another run
+- **Model routing** — optionally route simple, complex, and image tasks to configured providers; selecting a model manually turns routing off
 - **Safety** — permission modes, Approve/Deny previews, audit log with secret redaction, kill switch `Ctrl/Cmd+Shift+.`
 
 ## Requirements
