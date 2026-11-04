@@ -10,6 +10,8 @@ import type {
   AgentStartRequest,
   PermissionRequest
 } from './agent'
+import type { WorkflowDefinition, WorkflowRun } from './workflow'
+import type { WorkflowTriggerConfig } from './workflowTriggers'
 
 /** IPC channel names — single source of truth for main/preload/renderer */
 export const IpcChannels = {
@@ -48,7 +50,15 @@ export const IpcChannels = {
   mcpSave: 'mcp:save',
   auditRecent: 'audit:recent',
   memoryList: 'memory:list',
-  memoryDelete: 'memory:delete'
+  memoryDelete: 'memory:delete',
+  workflowList: 'workflow:list', workflowSave: 'workflow:save', workflowDelete: 'workflow:delete',
+  workflowValidate: 'workflow:validate', workflowStart: 'workflow:start', workflowRuns: 'workflow:runs',
+  workflowRun: 'workflow:run', workflowPause: 'workflow:pause', workflowResume: 'workflow:resume',
+  workflowCancel: 'workflow:cancel', workflowApprove: 'workflow:approve', workflowEvent: 'workflow:event',
+  workflowApprovals: 'workflow:approvals', workflowEvents: 'workflow:events',
+  workflowTriggerList: 'workflow:trigger-list', workflowTriggerSave: 'workflow:trigger-save', workflowTriggerDelete: 'workflow:trigger-delete',
+  workflowDryRun: 'workflow:dry-run', workflowReplay: 'workflow:replay', workflowAnswer: 'workflow:answer',
+  workflowRevisions: 'workflow:revisions', workflowRestoreRevision: 'workflow:restore-revision'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
@@ -94,6 +104,28 @@ export interface UpdateCheckResult {
 }
 
 export interface LocalPilotApi {
+  listWorkflows: () => Promise<WorkflowDefinition[]>
+  saveWorkflowDefinition: (definition: WorkflowDefinition) => Promise<WorkflowDefinition>
+  deleteWorkflowDefinition: (id: string) => Promise<void>
+  validateWorkflow: (definition: WorkflowDefinition) => Promise<{ ok: boolean; errors: string[] }>
+  startWorkflow: (request: { workflowId: string; input?: Record<string, unknown> }) => Promise<{ runId: string }>
+  listWorkflowRuns: (workflowId?: string) => Promise<WorkflowRun[]>
+  getWorkflowRun: (runId: string) => Promise<WorkflowRun | null>
+  pauseWorkflow: (runId: string) => Promise<void>
+  resumeWorkflow: (runId: string) => Promise<void>
+  cancelWorkflow: (runId: string) => Promise<void>
+  respondWorkflowApproval: (runId: string, nodeId: string, allowed: boolean) => Promise<void>
+  listWorkflowApprovals: (runId: string) => Promise<Array<{ nodeId: string; prompt: string; kind: 'approval' | 'question' }>>
+  answerWorkflowQuestion: (runId: string, nodeId: string, answer: string) => Promise<void>
+  listWorkflowRevisions: (workflowId: string) => Promise<Array<{ revision: number; definition: WorkflowDefinition }>>
+  restoreWorkflowRevision: (workflowId: string, revision: number) => Promise<WorkflowDefinition>
+  listWorkflowEvents: (runId: string) => Promise<Array<{ id: number; runId: string; type: string; payload: unknown; createdAt: number }>>
+  listWorkflowTriggers: (workflowId?: string) => Promise<WorkflowTriggerConfig[]>
+  saveWorkflowTrigger: (trigger: WorkflowTriggerConfig) => Promise<{ trigger: WorkflowTriggerConfig; token?: string }>
+  deleteWorkflowTrigger: (id: string) => Promise<void>
+  dryRunWorkflow: (workflowId: string) => Promise<Array<{ nodeId: string; kind: string; label: string; risk?: string }>>
+  replayUnknownWorkflowNode: (runId: string, nodeId: string, confirm: true) => Promise<void>
+  onWorkflowEvent: (handler: (run: WorkflowRun) => void) => () => void
   getVersion: () => Promise<string>
   getPlatform: () => Promise<string>
   checkForUpdates: () => Promise<UpdateCheckResult>

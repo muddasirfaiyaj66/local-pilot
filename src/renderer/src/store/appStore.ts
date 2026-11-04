@@ -138,7 +138,7 @@ interface AppState {
   isStreaming: boolean
   activeRequestId: string | null
   error: string | null
-  view: 'chat' | 'settings'
+  view: 'chat' | 'settings' | 'workflow'
   testResult: TestConnectionResult | null
   interactionMode: InteractionMode
   plan: AgentPlan | null
@@ -163,7 +163,7 @@ interface AppState {
   refreshProcesses: () => Promise<void>
   stopProcess: (id: string) => Promise<void>
   init: () => Promise<void>
-  setView: (view: 'chat' | 'settings') => void
+  setView: (view: 'chat' | 'settings' | 'workflow') => void
   setInteractionMode: (mode: InteractionMode) => void
   setPermissionMode: (mode: PermissionMode) => Promise<void>
   setMaxAgentSteps: (steps: number) => Promise<void>

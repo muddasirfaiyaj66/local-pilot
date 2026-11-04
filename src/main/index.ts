@@ -5,6 +5,8 @@ import { SettingsStore } from './settings'
 import { abortAllStreams, registerIpcHandlers } from './ipc/handlers'
 import { registerKillSwitch, unregisterKillSwitch } from './safety/killswitch'
 import { setupAutoUpdater } from './updater'
+import { recoverWorkflows } from './workflow/service'
+import { initializeWorkflowTriggers, stopWorkflowTriggers } from './workflow/automation'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -58,6 +60,8 @@ app.whenReady().then(() => {
   })
 
   const settingsStore = new SettingsStore()
+  recoverWorkflows()
+  void initializeWorkflowTriggers(settingsStore, () => mainWindow).catch((error: unknown) => console.warn('[LocalPilot] Workflow triggers failed', error))
   registerIpcHandlers(settingsStore)
   registerKillSwitch(() => {
     abortAllStreams()
@@ -96,6 +100,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  stopWorkflowTriggers()
   abortAllStreams()
   unregisterKillSwitch()
   void import('./tools/process').then(({ stopAllProcesses }) => stopAllProcesses())
