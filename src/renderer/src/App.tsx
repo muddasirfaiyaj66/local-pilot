@@ -1,7 +1,8 @@
-import { ChatCircle, Gear, Stop } from '@phosphor-icons/react'
+import { ChatCircle, Gear, Graph, Stop } from '@phosphor-icons/react'
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { useAppStore } from './store/appStore'
 import { SettingsPage } from './pages/SettingsPage'
+import { WorkflowPage } from './workflow/WorkflowPage'
 import { TaskSidebar } from './components/TaskSidebar'
 import { MessageList } from './components/MessageList'
 import { LivePreviewPane } from './components/LivePreviewPane'
@@ -151,9 +152,14 @@ export default function App(): React.JSX.Element {
         >
           <Gear size={17} weight={view === 'settings' ? 'fill' : 'regular'} aria-hidden />
         </button>
+        <button type="button" className="lp-icon-btn" aria-label="Flow Engine" aria-pressed={view === 'workflow'} onClick={() => setView('workflow')} title="Flow Engine">
+          <Graph size={17} weight={view === 'workflow' ? 'fill' : 'regular'} aria-hidden />
+        </button>
       </nav>
 
-      {view === 'settings' ? (
+      {view === 'workflow' ? (
+        <WorkflowPage />
+      ) : view === 'settings' ? (
         <SettingsPage />
       ) : (
         <>

@@ -32,6 +32,7 @@ LocalPilot is an Electron desktop app that pairs a chat UI with an agent loop. Y
 - **Memory** — SQLite notes (`memory_*`) and task history (`node:sqlite`)
 - **Diff review** — Keep / Undo for agent file changes; attachments; context/token meter
 - **Reusable workflows** — save a goal or plan as named, editable steps and load it into the composer for another run
+- **Flow Engine** — design and run validated workflow graphs with AI, tool, condition, approval, delay, and nested workflow nodes; monitor runs and add local automation triggers
 - **Model routing** — optionally route simple, complex, and image tasks to configured providers; selecting a model manually turns routing off
 - **Safety** — permission modes, Approve/Deny previews, audit log with secret redaction, kill switch `Ctrl/Cmd+Shift+.`
 
@@ -66,6 +67,15 @@ npm rebuild electron
 3. Use **Open Folder** to set a workspace (required for Agent / Plan tools).
 4. Return to chat, choose **Chat**, **Plan**, or **Agent**, pick a model, and send a message.
 
+### Flow Engine quick start
+
+1. Select **Flow Engine** (graph icon) in the activity rail. A new workflow starts with connected Input and Output nodes.
+2. Add nodes from the palette and drag them into place. Click **Connect** on a source and then click a target card, or drag **Connect** onto the target card. Select a node to configure it in the Inspector. Condition nodes need both **true** and **false** outgoing edges.
+3. Click **Validate**, then **Save**. Enter an optional JSON object in **Run input JSON** and click **Run**. **Dry run** shows node order and tool risk without executing nodes.
+4. Select a run to inspect node status, input, output, errors, and execution events. Use **Pause**, **Resume**, or **Cancel** while it runs. Approval requests appear in the Runs panel.
+
+The original text-step workflows remain in the chat composer. Flow Engine graphs are stored separately. You can import or export graph JSON from the Flow Engine toolbar. See [Flow Engine guide](docs/FLOW_ENGINE.md) for nodes, automation triggers, recovery, and current limits.
+
 ## Scripts
 
 | Command | Description |
@@ -96,6 +106,7 @@ src/main/agent/       Agent loop, planner, memory
 src/main/providers/   Ollama, OpenAI-compatible (Anthropic/Gemini via gateway)
 src/main/tools/       fs, shell, background processes, code, browser, screen, media, MCP, memory
 src/main/safety/      Permissions, kill switch, audit log
+src/main/workflow/    Graph validation, execution, persistence, triggers
 src/renderer/         Chat UI, settings, diff review, app/screen preview
 src/shared/           Zod schemas, IPC contracts
 design-system/        UI tokens

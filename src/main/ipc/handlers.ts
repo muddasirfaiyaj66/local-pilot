@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron'
 import { randomUUID } from 'node:crypto'
+import { z } from 'zod'
 import { ChatRequestSchema } from '@shared/schemas'
 import { contextLimitForModel } from '@shared/context'
 import { AgentStartRequestSchema, type PermissionRequest } from '@shared/agent'
@@ -26,6 +27,11 @@ import { listWorkspaceTree, readWorkspaceText, searchWorkspaceFiles } from '../t
 import { loadMcpTools, readMcpConfig, writeMcpConfig } from '../tools/mcp'
 import { refreshDynamicTools } from '../tools/registry'
 import { restoreWorkspaceFile } from '../tools/restore'
+import { WorkflowDefinitionSchema } from '@shared/workflow'
+import { validateWorkflow } from '../workflow/validate'
+import { saveDefinition, listDefinitions, deleteDefinition, listRuns, getRun, listWorkflowEvents, listDefinitionRevisions, getDefinitionRevision } from '../workflow/store'
+import { startWorkflow, pauseWorkflow, resumeStoredWorkflow, cancelWorkflow, cancelAllWorkflows, respondWorkflowApproval, pendingWorkflowApprovals, dryRunWorkflow, replayUnknownWorkflowNode, answerWorkflowQuestion } from '../workflow/service'
+import { listWorkflowTriggers, saveWorkflowTrigger, deleteWorkflowTrigger, reloadWorkflowTriggers } from '../workflow/automation'
 
 const activeStreams = new Map<string, AbortController>()
 
@@ -53,6 +59,64 @@ function abortAgentSession(requestId: string): void {
 }
 
 export function registerIpcHandlers(store: SettingsStore): void {
+  const idSchema = z.string().min(1).max(120)
+  ipcMain.handle(IpcChannels.workflowList, () => listDefinitions())
+  ipcMain.handle(IpcChannels.workflowSave, (_event, raw: unknown) => {
+    const definition = WorkflowDefinitionSchema.parse(raw)
+    const checked = validateWorkflow(definition)
+    if (!checked.valid) throw new Error(checked.errors.join('; '))
+    return saveDefinition(definition)
+  })
+  ipcMain.handle(IpcChannels.workflowDelete, async (_event, raw: unknown) => {
+    const id = idSchema.parse(raw)
+    for (const trigger of listWorkflowTriggers(id)) await deleteWorkflowTrigger(trigger.id)
+    deleteDefinition(id)
+  })
+  ipcMain.handle(IpcChannels.workflowValidate, (_event, raw: unknown) => {
+    const result = validateWorkflow(raw)
+    return { ok: result.valid, errors: result.errors }
+  })
+  ipcMain.handle(IpcChannels.workflowStart, (event, raw: unknown) => {
+    const request = z.object({ workflowId: idSchema, input: z.record(z.unknown()).optional() }).strict().parse(raw)
+    const serialized = JSON.stringify(request.input ?? {})
+    if (!serialized || serialized.length > 100_000) throw new Error('Workflow input exceeds 100 KB')
+    const input = JSON.parse(serialized) as Record<string, unknown>
+    const run = startWorkflow(request.workflowId, input, store, BrowserWindow.fromWebContents(event.sender))
+    return { runId: run.id }
+  })
+  ipcMain.handle(IpcChannels.workflowRuns, (_event, raw: unknown) => {
+    const id = raw === undefined ? undefined : idSchema.parse(raw)
+    return listRuns().filter((run) => !id || run.workflowId === id)
+  })
+  ipcMain.handle(IpcChannels.workflowRun, (_event, raw: unknown) => getRun(idSchema.parse(raw)))
+  ipcMain.handle(IpcChannels.workflowPause, (_event, raw: unknown) => pauseWorkflow(idSchema.parse(raw)))
+  ipcMain.handle(IpcChannels.workflowResume, (event, raw: unknown) => resumeStoredWorkflow(idSchema.parse(raw), store, BrowserWindow.fromWebContents(event.sender)))
+  ipcMain.handle(IpcChannels.workflowCancel, (_event, raw: unknown) => cancelWorkflow(idSchema.parse(raw)))
+  ipcMain.handle(IpcChannels.workflowApprovals, (_event, raw: unknown) => pendingWorkflowApprovals(idSchema.parse(raw)))
+  ipcMain.handle(IpcChannels.workflowEvents, (_event, raw: unknown) => listWorkflowEvents(idSchema.parse(raw)))
+  ipcMain.handle(IpcChannels.workflowTriggerList, (_event, raw: unknown) => listWorkflowTriggers(raw === undefined ? undefined : idSchema.parse(raw)))
+  ipcMain.handle(IpcChannels.workflowTriggerSave, (_event, raw: unknown) => saveWorkflowTrigger(raw))
+  ipcMain.handle(IpcChannels.workflowTriggerDelete, (_event, raw: unknown) => deleteWorkflowTrigger(idSchema.parse(raw)))
+  ipcMain.handle(IpcChannels.workflowDryRun, (_event, raw: unknown) => dryRunWorkflow(idSchema.parse(raw)))
+  ipcMain.handle(IpcChannels.workflowRevisions, (_event, raw: unknown) => listDefinitionRevisions(idSchema.parse(raw)).map(({ revision, definition }) => ({ revision, definition })))
+  ipcMain.handle(IpcChannels.workflowRestoreRevision, (_event, rawId: unknown, rawRevision: unknown) => {
+    const id = idSchema.parse(rawId)
+    const revision = z.number().int().positive().parse(rawRevision)
+    const historic = getDefinitionRevision(id, revision)
+    if (!historic) throw new Error('Workflow revision not found')
+    const restored = { ...historic.definition, updatedAt: Date.now() }
+    return saveDefinition(restored)
+  })
+  ipcMain.handle(IpcChannels.workflowReplay, (event, rawRun: unknown, rawNode: unknown, rawConfirm: unknown) => {
+    z.literal(true).parse(rawConfirm)
+    replayUnknownWorkflowNode(idSchema.parse(rawRun), idSchema.parse(rawNode), store, BrowserWindow.fromWebContents(event.sender))
+  })
+  ipcMain.handle(IpcChannels.workflowApprove, (_event, rawRunId: unknown, rawNodeId: unknown, rawAllowed: unknown) => {
+    respondWorkflowApproval(idSchema.parse(rawRunId), idSchema.parse(rawNodeId), z.boolean().parse(rawAllowed))
+  })
+  ipcMain.handle(IpcChannels.workflowAnswer, (_event, rawRunId: unknown, rawNodeId: unknown, rawAnswer: unknown) => {
+    answerWorkflowQuestion(idSchema.parse(rawRunId), idSchema.parse(rawNodeId), z.string().max(4000).parse(rawAnswer))
+  })
   ipcMain.handle(IpcChannels.appGetVersion, () => app.getVersion())
   ipcMain.handle(IpcChannels.appGetPlatform, () => process.platform)
   ipcMain.handle(IpcChannels.appCheckUpdates, async () => {
@@ -215,7 +279,11 @@ export function registerIpcHandlers(store: SettingsStore): void {
   ipcMain.handle(IpcChannels.settingsGet, () => store.getSettings())
   ipcMain.handle(
     IpcChannels.settingsSet,
-    (_e, partial: Partial<ReturnType<SettingsStore['getSettings']>>) => store.setSettings(partial)
+    (_e, partial: Partial<ReturnType<SettingsStore['getSettings']>>) => {
+      const updated = store.setSettings(partial)
+      if (partial.workspacePath !== undefined) void reloadWorkflowTriggers()
+      return updated
+    }
   )
   ipcMain.handle(IpcChannels.providerList, () => store.listProviders())
   ipcMain.handle(IpcChannels.providerUpsert, (_e, input: ProviderUpsertInput) =>
@@ -406,6 +474,7 @@ export function registerIpcHandlers(store: SettingsStore): void {
 }
 
 export function abortAllStreams(): void {
+  cancelAllWorkflows()
   for (const [id, controller] of activeStreams) {
     controller.abort()
     activeStreams.delete(id)

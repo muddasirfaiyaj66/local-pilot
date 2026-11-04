@@ -17,8 +17,36 @@ import {
 } from '../shared/ipc'
 import type { AgentStartRequest } from '../shared/agent'
 import type { AppSettings, ChatRequest, ProviderConfig, TestConnectionResult } from '../shared/types'
+import type { WorkflowDefinition, WorkflowRun } from '../shared/workflow'
+import type { WorkflowTriggerConfig } from '../shared/workflowTriggers'
 
 const api: LocalPilotApi = {
+  listWorkflows: () => ipcRenderer.invoke(IpcChannels.workflowList) as Promise<WorkflowDefinition[]>,
+  saveWorkflowDefinition: (definition) => ipcRenderer.invoke(IpcChannels.workflowSave, definition) as Promise<WorkflowDefinition>,
+  deleteWorkflowDefinition: (id) => ipcRenderer.invoke(IpcChannels.workflowDelete, id) as Promise<void>,
+  validateWorkflow: (definition) => ipcRenderer.invoke(IpcChannels.workflowValidate, definition) as Promise<{ ok: boolean; errors: string[] }>,
+  startWorkflow: (request) => ipcRenderer.invoke(IpcChannels.workflowStart, request) as Promise<{ runId: string }>,
+  listWorkflowRuns: (workflowId) => ipcRenderer.invoke(IpcChannels.workflowRuns, workflowId) as Promise<WorkflowRun[]>,
+  getWorkflowRun: (runId) => ipcRenderer.invoke(IpcChannels.workflowRun, runId) as Promise<WorkflowRun | null>,
+  pauseWorkflow: (runId) => ipcRenderer.invoke(IpcChannels.workflowPause, runId) as Promise<void>,
+  resumeWorkflow: (runId) => ipcRenderer.invoke(IpcChannels.workflowResume, runId) as Promise<void>,
+  cancelWorkflow: (runId) => ipcRenderer.invoke(IpcChannels.workflowCancel, runId) as Promise<void>,
+  respondWorkflowApproval: (runId, nodeId, allowed) => ipcRenderer.invoke(IpcChannels.workflowApprove, runId, nodeId, allowed) as Promise<void>,
+  listWorkflowApprovals: (runId) => ipcRenderer.invoke(IpcChannels.workflowApprovals, runId) as Promise<Array<{ nodeId: string; prompt: string; kind: 'approval' | 'question' }>>,
+  answerWorkflowQuestion: (runId, nodeId, answer) => ipcRenderer.invoke(IpcChannels.workflowAnswer, runId, nodeId, answer) as Promise<void>,
+  listWorkflowRevisions: (workflowId) => ipcRenderer.invoke(IpcChannels.workflowRevisions, workflowId) as Promise<Array<{ revision: number; definition: WorkflowDefinition }>>,
+  restoreWorkflowRevision: (workflowId, revision) => ipcRenderer.invoke(IpcChannels.workflowRestoreRevision, workflowId, revision) as Promise<WorkflowDefinition>,
+  listWorkflowEvents: (runId) => ipcRenderer.invoke(IpcChannels.workflowEvents, runId) as Promise<Array<{ id: number; runId: string; type: string; payload: unknown; createdAt: number }>>,
+  listWorkflowTriggers: (workflowId) => ipcRenderer.invoke(IpcChannels.workflowTriggerList, workflowId) as Promise<WorkflowTriggerConfig[]>,
+  saveWorkflowTrigger: (trigger) => ipcRenderer.invoke(IpcChannels.workflowTriggerSave, trigger) as Promise<{ trigger: WorkflowTriggerConfig; token?: string }>,
+  deleteWorkflowTrigger: (id) => ipcRenderer.invoke(IpcChannels.workflowTriggerDelete, id) as Promise<void>,
+  dryRunWorkflow: (workflowId) => ipcRenderer.invoke(IpcChannels.workflowDryRun, workflowId) as Promise<Array<{ nodeId: string; kind: string; label: string; risk?: string }>>,
+  replayUnknownWorkflowNode: (runId, nodeId, confirm) => ipcRenderer.invoke(IpcChannels.workflowReplay, runId, nodeId, confirm) as Promise<void>,
+  onWorkflowEvent: (handler) => {
+    const listener = (_event: IpcRendererEvent, run: WorkflowRun): void => handler(run)
+    ipcRenderer.on(IpcChannels.workflowEvent, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.workflowEvent, listener)
+  },
   getVersion: () => ipcRenderer.invoke(IpcChannels.appGetVersion) as Promise<string>,
   getPlatform: () => ipcRenderer.invoke(IpcChannels.appGetPlatform) as Promise<string>,
   checkForUpdates: () =>
