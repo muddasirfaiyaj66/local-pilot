@@ -64,6 +64,10 @@ export function MessageList(): React.JSX.Element {
     count: items.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 84,
+    // Cache measured heights per item, not per index. Rows shift index when a
+    // message is inserted (the agent block moves down one); index-keyed sizes
+    // then belong to the wrong row and later rows render on top of each other.
+    getItemKey: (index) => items[index]?.key ?? index,
     overscan: 6
   })
 

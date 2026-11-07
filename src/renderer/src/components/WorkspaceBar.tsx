@@ -71,7 +71,7 @@ export function WorkspaceBanner(): React.JSX.Element | null {
       <button
         type="button"
         onClick={() => void openWorkspace()}
-        className="shrink-0 rounded bg-[var(--color-accent)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--color-on-accent)] hover:bg-[var(--color-accent-2)]"
+        className="shrink-0 rounded bg-[var(--color-accent-strong)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--color-on-accent)] hover:bg-[var(--color-accent-2)]"
       >
         Open Folder
       </button>

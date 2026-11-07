@@ -13,7 +13,7 @@
 Match **Cursor / VS Code agent** feel:
 
 - Charcoal surfaces (`#0a0a0a` → `#1e1e1e`), hairline borders (`#2a2a2a`)
-- **Blue** interactive accent (`#3b82f6`) — not green, not purple
+- **Blue** interactive accent (brand `#2f8df5`) — not green, not purple, not orange
 - Flat panes, almost no shadows; composer gets a subtle elevation ring
 - Transcript chat (no bubble cards); muted role labels
 - Elevated **composer** docked at bottom of the chat column
@@ -21,7 +21,7 @@ Match **Cursor / VS Code agent** feel:
 - Icons: Phosphor outline, 14–16px
 - Type: **IBM Plex Sans** UI + **IBM Plex Mono** for code/meta (not Inter)
 
-**Logo:** Geometric **LP** monogram (LocalPilot initials). Flat blue `#3B82F6` on charcoal. Assets: `build/icon.png`, `src/renderer/src/assets/logo-mark.svg`.
+**Logo:** Geometric **LP** monogram (LocalPilot initials). Flat blue `#2F8DF5` on charcoal. Assets: `build/icon.png`, `src/renderer/src/assets/logo-mark.svg`.
 
 **Avoid:** mint/teal dashboards, AI purple glow, marketing heroes, heavy cards, green “run” CTAs, clipart-style pictorial marks.
 
@@ -29,24 +29,26 @@ Match **Cursor / VS Code agent** feel:
 
 ## Tokens
 
-Instrument-panel palette: warm near-black canvas, copper interactive accent.
-Brand mark stays blue; the interactive accent is intentionally not the generic tech blue.
+Instrument-panel palette: cool near-black canvas, LocalPilot brand blue (the logo blue) as the only accent. No orange/copper.
+
+Use `--color-accent` for text, links, indicators, and focus rings (5.6:1 on the background). Filled controls with a label use `--color-accent-strong`: white on the logo blue is only 3.4:1, white on the strong blue is 4.9:1.
 
 | Role | Hex | Variable |
 |------|-----|----------|
-| Background | `#0b0b0c` | `--color-bg` |
-| Surface | `#121214` | `--color-surface` |
-| Surface raised | `#17171a` | `--color-surface-2` |
-| Surface 3 | `#1e1e22` | `--color-surface-3` |
-| Hover | `#202127` | `--color-hover` |
-| Border | `#26262b` | `--color-border` |
-| Border strong | `#35353c` | `--color-border-strong` |
-| Text | `#e9e7e4` | `--color-text` |
-| Text muted | `#a29d95` | `--color-text-muted` |
-| Text faint | `#84807a` | `--color-text-faint` |
-| Accent | `#e8963c` | `--color-accent` |
-| Accent muted | `#cf8531` | `--color-accent-2` |
-| On accent | `#0b0b0c` | `--color-on-accent` |
+| Background | `#0b0c0e` | `--color-bg` |
+| Surface | `#111215` | `--color-surface` |
+| Surface raised | `#16181c` | `--color-surface-2` |
+| Surface 3 | `#1c1f24` | `--color-surface-3` |
+| Hover | `#20232a` | `--color-hover` |
+| Border | `#262a31` | `--color-border` |
+| Border strong | `#343943` | `--color-border-strong` |
+| Text | `#e6e8eb` | `--color-text` |
+| Text muted | `#9aa1ab` | `--color-text-muted` |
+| Text faint | `#7c838e` | `--color-text-faint` |
+| Accent (brand blue) | `#2f8df5` | `--color-accent` |
+| Accent fill | `#1f6fd8` | `--color-accent-strong` |
+| Accent fill hover | `#1a5fbf` | `--color-accent-2` |
+| On accent fill | `#ffffff` | `--color-on-accent` |
 | Danger | `#e5484d` | `--color-danger` |
 | Warn | `#eab308` | `--color-warn` |
 | Success | `#46b17b` | `--color-ok` |

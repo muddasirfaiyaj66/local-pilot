@@ -19,7 +19,7 @@ import {
 
 const COLOR: Record<string, string> = {
   ts: '#5b9bd5', tsx: '#5b9bd5', js: '#e3c07a', jsx: '#e3c07a', mjs: '#e3c07a', cjs: '#e3c07a',
-  json: '#d7a2f0', md: '#a29d95', css: '#72b7e8', scss: '#e07aa6', html: '#e8963c',
+  json: '#d7a2f0', md: '#9aa1ab', css: '#72b7e8', scss: '#e07aa6', html: '#f07178',
   py: '#7fb8c4', rs: '#e39b6b', go: '#72d0e8', sh: '#9ccf8a', ps1: '#72b7e8',
   png: '#9ccf8a', jpg: '#9ccf8a', jpeg: '#9ccf8a', gif: '#9ccf8a', svg: '#e3c07a', webp: '#9ccf8a'
 }

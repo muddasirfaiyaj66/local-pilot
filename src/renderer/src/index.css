@@ -6,21 +6,24 @@
 @import 'tailwindcss';
 
 @theme {
-  /* Instrument-panel palette — warm near-black canvas, copper accent.
-     Warm-tinted neutrals (chroma under 0.02) read as authored, not empty. */
-  --color-bg: #0b0b0c;
-  --color-surface: #121214;
-  --color-surface-2: #17171a;
-  --color-surface-3: #1e1e22;
-  --color-hover: #202127;
-  --color-border: #26262b;
-  --color-border-strong: #35353c;
-  --color-text: #e9e7e4;
-  --color-text-muted: #a29d95;
-  --color-text-faint: #84807a;
-  --color-accent: #e8963c;
-  --color-accent-2: #cf8531;
-  --color-on-accent: #0b0b0c;
+  /* Instrument-panel palette — cool near-black canvas, LocalPilot brand blue.
+     --color-accent is the logo blue (#2f8df5): text, links, indicators, focus.
+     Filled controls use --color-accent-strong so white labels clear 4.5:1
+     (white on #2f8df5 is only 3.4:1). */
+  --color-bg: #0b0c0e;
+  --color-surface: #111215;
+  --color-surface-2: #16181c;
+  --color-surface-3: #1c1f24;
+  --color-hover: #20232a;
+  --color-border: #262a31;
+  --color-border-strong: #343943;
+  --color-text: #e6e8eb;
+  --color-text-muted: #9aa1ab;
+  --color-text-faint: #7c838e;
+  --color-accent: #2f8df5;
+  --color-accent-strong: #1f6fd8;
+  --color-accent-2: #1a5fbf;
+  --color-on-accent: #ffffff;
   --color-danger: #e5484d;
   --color-warn: #eab308;
   --color-ok: #46b17b;
@@ -211,7 +214,7 @@ select:disabled {
   height: 28px;
   border: none;
   border-radius: 6px;
-  background: var(--color-accent);
+  background: var(--color-accent-strong);
   color: var(--color-on-accent);
   transition:
     background-color var(--duration-fast) ease,
@@ -488,7 +491,7 @@ select:disabled {
 }
 .lp-btn-accent {
   border-color: transparent;
-  background: var(--color-accent);
+  background: var(--color-accent-strong);
   color: var(--color-on-accent);
 }
 .lp-btn-accent:hover:not(:disabled) {

@@ -38,7 +38,7 @@ export class ErrorBoundary extends Component<Props, State> {
         </pre>
         <button
           type="button"
-          className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-on-accent)] hover:bg-[var(--color-accent-2)]"
+          className="rounded-md bg-[var(--color-accent-strong)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-on-accent)] hover:bg-[var(--color-accent-2)]"
           onClick={() => this.setState({ error: null })}
         >
           Reload view
