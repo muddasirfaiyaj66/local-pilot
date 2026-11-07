@@ -4,6 +4,8 @@ import { ArrowClockwise, FloppyDisk, Play, Plus, Stop, Trash, Pause, ArrowRight,
 import type { WorkflowDefinition, WorkflowEdge, WorkflowNode, WorkflowNodeKind, WorkflowRun } from '@shared/workflow'
 import { WorkflowDefinitionSchema } from '@shared/workflow'
 import type { WorkflowTriggerConfig } from '@shared/workflowTriggers'
+import { Dialog } from '../components/ui/Dialog'
+import { Button } from '../components/ui/Button'
 
 const kinds: WorkflowNodeKind[] = ['input', 'agent', 'tool', 'condition', 'approval', 'delay', 'output', 'subworkflow', 'custom']
 const terminal = new Set(['succeeded', 'failed', 'cancelled'])
@@ -68,8 +70,13 @@ export function WorkflowPage(): React.JSX.Element {
   const [filterPath, setFilterPath] = useState('')
   const [filterEquals, setFilterEquals] = useState('true')
   const [triggerToken, setTriggerToken] = useState<string | null>(null)
+  const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const canvas = useRef<HTMLDivElement>(null)
   const importInput = useRef<HTMLInputElement>(null)
+
+  function askConfirm(message: string, onConfirm: () => void): void {
+    setConfirmState({ message, onConfirm })
+  }
   const gesture = useRef<
     | { kind: 'move'; pointerId: number; nodeId: string; clientX: number; clientY: number; startX: number; startY: number; moved: boolean }
     | { kind: 'connect'; pointerId: number; nodeId: string; clientX: number; clientY: number; moved: boolean }
@@ -147,13 +154,16 @@ export function WorkflowPage(): React.JSX.Element {
       setTriggers((old) => old.map((item) => item.id === trigger.id ? result.trigger : item))
     } catch (error) { setMessage(String(error)) }
   }
-  async function removeTrigger(trigger: WorkflowTriggerConfig): Promise<void> {
-    if (!window.confirm(`Delete ${trigger.kind} trigger?`)) return
-    try {
-      await window.localpilot.deleteWorkflowTrigger(trigger.id)
-      setTriggers((old) => old.filter((item) => item.id !== trigger.id))
-      setTriggerToken(null)
-    } catch (error) { setMessage(String(error)) }
+  function removeTrigger(trigger: WorkflowTriggerConfig): void {
+    askConfirm(`Delete ${trigger.kind} trigger?`, () => {
+      void (async () => {
+        try {
+          await window.localpilot.deleteWorkflowTrigger(trigger.id)
+          setTriggers((old) => old.filter((item) => item.id !== trigger.id))
+          setTriggerToken(null)
+        } catch (error) { setMessage(String(error)) }
+      })()
+    })
   }
 
   function edit(updater: (old: WorkflowDefinition) => WorkflowDefinition): void {
@@ -330,18 +340,21 @@ export function WorkflowPage(): React.JSX.Element {
     } catch (error) { setMessage(`Import failed: ${error instanceof Error ? error.message : String(error)}`) }
     finally { if (importInput.current) importInput.current.value = '' }
   }
-  async function restoreRevision(revision: number): Promise<void> {
-    if (!window.confirm(`Restore revision ${revision} of “${definition.name}”? Your current graph will be replaced by a new saved revision.`)) return
-    try {
-      const restored = await window.localpilot.restoreWorkflowRevision(definition.id, revision)
-      setDefinition(restored)
-      setSelected(null)
-      setDryRun(null)
-      setErrors([])
-      await refresh()
-      setRevisions(await window.localpilot.listWorkflowRevisions(restored.id))
-      setMessage(`Restored revision ${revision}.`)
-    } catch (error) { setMessage(String(error)) }
+  function restoreRevision(revision: number): void {
+    askConfirm(`Restore revision ${revision} of “${definition.name}”? Your current graph will be replaced by a new saved revision.`, () => {
+      void (async () => {
+        try {
+          const restored = await window.localpilot.restoreWorkflowRevision(definition.id, revision)
+          setDefinition(restored)
+          setSelected(null)
+          setDryRun(null)
+          setErrors([])
+          await refresh()
+          setRevisions(await window.localpilot.listWorkflowRevisions(restored.id))
+          setMessage(`Restored revision ${revision}.`)
+        } catch (error) { setMessage(String(error)) }
+      })()
+    })
   }
   async function act(action: 'pause' | 'resume' | 'cancel'): Promise<void> {
     if (!runId) return
@@ -370,15 +383,18 @@ export function WorkflowPage(): React.JSX.Element {
       setAnswers((old) => { const next = { ...old }; delete next[nodeId]; return next })
     } catch (error) { setMessage(String(error)) }
   }
-  async function replayUnknown(nodeId: string): Promise<void> {
+  function replayUnknown(nodeId: string): void {
     if (!runId) return
-    if (!window.confirm('This node may already have completed its action before the app stopped. Replaying it could repeat that action. Replay anyway?')) return
-    try {
-      await window.localpilot.replayUnknownWorkflowNode(runId, nodeId, true)
-      const run = await window.localpilot.getWorkflowRun(runId)
-      if (run) setRuns((old) => [run, ...old.filter((item) => item.id !== run.id)])
-      setMessage('Manual replay started.')
-    } catch (error) { setMessage(String(error)) }
+    askConfirm('This node may already have completed its action before the app stopped. Replaying it could repeat that action. Replay anyway?', () => {
+      void (async () => {
+        try {
+          await window.localpilot.replayUnknownWorkflowNode(runId, nodeId, true)
+          const run = await window.localpilot.getWorkflowRun(runId)
+          if (run) setRuns((old) => [run, ...old.filter((item) => item.id !== run.id)])
+          setMessage('Manual replay started.')
+        } catch (error) { setMessage(String(error)) }
+      })()
+    })
   }
   const edges = useMemo(() => definition.edges.map((edge) => {
     const source = definition.nodes.find((node) => node.id === edge.source)
@@ -386,13 +402,14 @@ export function WorkflowPage(): React.JSX.Element {
     return source && target ? { edge, x1: source.position.x + cardWidth, y1: source.position.y + cardHeight / 2, x2: target.position.x, y2: target.position.y + cardHeight / 2 } : null
   }).filter((item) => item !== null), [definition])
 
-  return <main className="flex min-w-0 flex-1 overflow-hidden bg-[var(--color-bg)] text-[var(--color-text)]">
+  return <>
+  <main className="flex min-w-0 flex-1 overflow-hidden bg-[var(--color-bg)] text-[var(--color-text)]">
     <aside className="flex w-56 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] p-3">
       <div className="mb-3 flex items-center justify-between"><h1 className="text-sm font-semibold">Workflows</h1><button className="lp-icon-btn" title="New workflow" aria-label="New workflow" onClick={() => { setDefinition(fresh()); setSelected(null); setRunId(null); setErrors([]) }}><Plus size={16} /></button></div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {definitions.map((item) => <div key={item.id} className="mb-1 flex items-center gap-1 rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1">
           <button className="min-w-0 flex-1 truncate px-1 text-left text-xs" title={item.name} onClick={() => { setDefinition(item); setSelected(null); setRunId(null); setErrors([]) }}>{item.name}</button>
-          <button className="lp-icon-btn !h-6 !w-6" title={`Delete ${item.name}`} aria-label={`Delete ${item.name}`} onClick={() => { if (window.confirm(`Delete workflow “${item.name}”?`)) void window.localpilot.deleteWorkflowDefinition(item.id).then(() => { if (definition.id === item.id) { setDefinition(fresh()); setSelected(null); setRunId(null) } return refresh() }).catch((error: unknown) => setMessage(String(error))) }}><Trash size={12} /></button>
+          <button className="lp-icon-btn !h-6 !w-6" title={`Delete ${item.name}`} aria-label={`Delete ${item.name}`} onClick={() => askConfirm(`Delete workflow “${item.name}”?`, () => { void window.localpilot.deleteWorkflowDefinition(item.id).then(() => { if (definition.id === item.id) { setDefinition(fresh()); setSelected(null); setRunId(null) } return refresh() }).catch((error: unknown) => setMessage(String(error))) })}><Trash size={12} /></button>
         </div>)}
       </div>
       <div className="border-t border-[var(--color-border)] pt-3"><div className="mb-2 text-xs font-medium">Node palette</div><div className="grid grid-cols-2 gap-1">{kinds.map((kind) => <button key={kind} className="lp-btn !justify-start text-xs capitalize" onClick={() => addNode(kind)}><Plus size={11} /> {kind}</button>)}</div></div>
@@ -452,6 +469,17 @@ export function WorkflowPage(): React.JSX.Element {
       {selectedNode ? <NodeInspector node={selectedNode} edges={definition.edges} nodeRun={currentRun?.nodeRuns[selectedNode.id]} onChange={updateNode} onDelete={() => { edit((old) => ({ ...old, nodes: old.nodes.filter((node) => node.id !== selectedNode.id), edges: old.edges.filter((edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id) })); setSelected(null) }} onRemoveEdge={(edgeId) => edit((old) => ({ ...old, edges: old.edges.filter((edge) => edge.id !== edgeId) }))} onBranch={(edgeId, branch) => edit((old) => ({ ...old, edges: old.edges.map((edge) => edge.id === edgeId ? { ...edge, branch } : edge) }))} /> : <p className="text-xs text-[var(--color-text-muted)]">Select a node to edit its configuration and inspect its latest input and output.</p>}
     </aside>
   </main>
+  {confirmState && (
+    <Dialog open onClose={() => setConfirmState(null)} labelledBy="lp-confirm-title" className="max-w-md">
+      <h2 id="lp-confirm-title" className="text-[14px] font-semibold text-[var(--color-text)]">Are you sure?</h2>
+      <p className="mt-2 text-[13px] text-[var(--color-text-muted)]">{confirmState.message}</p>
+      <div className="mt-4 flex justify-end gap-2">
+        <Button onClick={() => setConfirmState(null)}>Cancel</Button>
+        <Button variant="danger" onClick={() => { const action = confirmState.onConfirm; setConfirmState(null); action() }}>Confirm</Button>
+      </div>
+    </Dialog>
+  )}
+  </>
 }
 
 function NodeInspector({ node, edges, nodeRun, onChange, onDelete, onRemoveEdge, onBranch }: {

@@ -1,0 +1,756 @@
+/* Workbench styles: app rail, Code view (IDE), Model Arena, Settings.
+   Uses the design tokens defined in index.css (@theme). */
+
+/* ═════════════ App rail ═════════════ */
+
+.lp-rail-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-faint);
+  transition:
+    background-color var(--duration-fast) ease,
+    color var(--duration-fast) ease;
+}
+.lp-rail-btn:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.lp-rail-btn[aria-pressed='true'] {
+  color: var(--color-text);
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+.lp-rail-btn[aria-pressed='true']::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+
+/* ═════════════ Code view (IDE) ═════════════ */
+
+.lp-activitybar {
+  display: flex;
+  width: 44px;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 0;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.lp-activity-btn {
+  position: relative;
+  display: flex;
+  width: 44px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--color-text-faint);
+  transition: color var(--duration-fast) ease;
+}
+.lp-activity-btn:hover,
+.lp-activity-btn.is-active {
+  color: var(--color-text);
+}
+.lp-activity-btn.is-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--color-accent);
+}
+.lp-activity-badge {
+  position: absolute;
+  right: 7px;
+  bottom: 6px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 14px;
+  text-align: center;
+}
+
+.lp-sidebar {
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.lp-side-section-head {
+  display: flex;
+  height: 34px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 14px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.lp-tree-row {
+  display: flex;
+  width: 100%;
+  min-height: 22px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  padding-right: 8px;
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+  text-align: left;
+  white-space: nowrap;
+}
+.lp-tree-row:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.lp-tree-row.is-active {
+  background: color-mix(in oklab, var(--color-accent) 10%, var(--color-surface-2));
+  color: var(--color-text);
+}
+.lp-tree-row.is-selected {
+  border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+}
+.lp-tree-row:focus-visible {
+  outline-offset: -2px;
+}
+.lp-tree-input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid var(--color-accent);
+  border-radius: 3px;
+  background: var(--color-bg);
+  padding: 1px 4px;
+  color: var(--color-text);
+  font-size: 12.5px;
+  outline: none;
+}
+
+.lp-mini-btn {
+  display: inline-flex;
+  height: 22px;
+  min-width: 22px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  padding: 0 3px;
+  color: var(--color-text-muted);
+  transition:
+    background-color var(--duration-fast) ease,
+    color var(--duration-fast) ease;
+}
+.lp-mini-btn:hover:not(:disabled) {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.lp-mini-btn.is-active {
+  background: color-mix(in oklab, var(--color-accent) 22%, transparent);
+  color: var(--color-text);
+}
+.lp-mini-btn:disabled {
+  opacity: 0.35;
+}
+
+.lp-menu {
+  position: fixed;
+  z-index: 80;
+  min-width: 200px;
+  padding: 4px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  outline: none;
+  animation: lp-fade-up var(--duration-fast) var(--ease-out-soft) both;
+}
+.lp-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  padding: 5px 8px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+.lp-menu-item.is-active {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.lp-menu-item.is-danger.is-active {
+  background: color-mix(in oklab, var(--color-danger) 18%, transparent);
+  color: #ffd0cf;
+}
+.lp-menu-item:disabled {
+  opacity: 0.4;
+}
+.lp-menu-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--color-border);
+}
+
+.lp-search-box {
+  display: flex;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface-2);
+  padding: 0 4px 0 8px;
+  transition: border-color var(--duration-fast) ease;
+}
+.lp-search-box:focus-within {
+  border-color: color-mix(in oklab, var(--color-accent) 60%, var(--color-border-strong));
+}
+.lp-search-mark {
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--color-accent) 35%, transparent);
+  color: var(--color-text);
+}
+.lp-count-pill {
+  display: inline-flex;
+  min-width: 16px;
+  height: 15px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--color-surface-3);
+  padding: 0 5px;
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-seg {
+  display: inline-flex;
+  gap: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--color-bg);
+  padding: 2px;
+}
+.lp-seg > button {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 24px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  padding: 0 10px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.lp-seg > button:hover {
+  color: var(--color-text);
+}
+.lp-seg > button.is-active {
+  background: var(--color-surface-3);
+  color: var(--color-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.lp-switch {
+  position: relative;
+  display: inline-flex;
+  width: 28px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.lp-switch input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.lp-switch span {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--color-surface-3);
+  transition: background-color var(--duration-fast) ease;
+}
+.lp-switch span::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--color-text-muted);
+  transition:
+    transform var(--duration-fast) var(--ease-out-soft),
+    background-color var(--duration-fast) ease;
+}
+.lp-switch input:checked + span {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+.lp-switch input:checked + span::after {
+  transform: translateX(12px);
+  background: var(--color-on-accent);
+}
+.lp-switch input:focus-visible + span {
+  outline: 2px solid color-mix(in oklab, var(--color-accent) 85%, transparent);
+  outline-offset: 2px;
+}
+.lp-switch input:disabled + span {
+  opacity: 0.5;
+}
+
+.lp-ext-card {
+  display: flex;
+  gap: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  padding: 10px;
+  transition: border-color var(--duration-fast) ease;
+}
+.lp-ext-card:hover {
+  border-color: var(--color-border-strong);
+}
+.lp-ext-icon {
+  display: flex;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--color-accent) 14%, var(--color-surface-3));
+  color: var(--color-accent);
+}
+
+.lp-editor-tabs {
+  display: flex;
+  height: 35px;
+  flex-shrink: 0;
+  align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  scrollbar-width: thin;
+}
+.lp-editor-tabs::-webkit-scrollbar {
+  height: 3px;
+}
+.lp-editor-tab {
+  position: relative;
+  display: flex;
+  max-width: 220px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  border-right: 1px solid var(--color-border);
+  padding: 0 6px 0 12px;
+  color: var(--color-text-faint);
+  font-size: 12.5px;
+  cursor: pointer;
+  user-select: none;
+}
+.lp-editor-tab:hover {
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+}
+.lp-editor-tab.is-active {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+.lp-editor-tab.is-active::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--color-accent);
+}
+.lp-editor-tab:focus-visible {
+  outline-offset: -2px;
+}
+.lp-editor-tab-close {
+  position: relative;
+  display: flex;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+.lp-editor-tab-close:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+/* Close "x" shows on the active/hovered tab; a dirty dot replaces it otherwise. */
+.lp-editor-tab-close .lp-close-x {
+  opacity: 0;
+}
+.lp-editor-tab.is-active .lp-close-x,
+.lp-editor-tab:hover .lp-close-x {
+  opacity: 1;
+}
+.lp-editor-tab-close .lp-dirty-dot {
+  position: absolute;
+  color: var(--color-text-muted);
+}
+.lp-editor-tab-close:has(.lp-dirty-dot) .lp-close-x {
+  opacity: 0;
+}
+.lp-editor-tab:hover .lp-editor-tab-close:has(.lp-dirty-dot) .lp-close-x {
+  opacity: 1;
+}
+.lp-editor-tab:hover .lp-dirty-dot {
+  opacity: 0;
+}
+
+.lp-breadcrumbs {
+  display: flex;
+  height: 24px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  padding: 0 14px;
+  color: var(--color-text-faint);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.lp-panel-head {
+  display: flex;
+  height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 0 12px;
+}
+.lp-panel-tab {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+.lp-panel-tab.is-active {
+  padding-bottom: 2px;
+  color: var(--color-text);
+  box-shadow: inset 0 -1px 0 var(--color-accent);
+}
+.lp-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--color-ok);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-ok) 25%, transparent);
+  animation: lp-pulse 1.4s ease-in-out infinite;
+}
+@keyframes lp-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+.lp-resize-handle-h {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  height: 6px;
+  cursor: row-resize;
+  transition: background-color var(--duration-fast) ease;
+}
+.lp-resize-handle-h:hover {
+  background: color-mix(in oklab, var(--color-accent) 45%, transparent);
+}
+
+.lp-ide-status {
+  display: flex;
+  height: 22px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 14px;
+  padding: 0 10px;
+  background: color-mix(in oklab, var(--color-accent) 82%, #000);
+  color: var(--color-on-accent);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.lp-ide-status button {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+}
+.lp-ide-status button:hover {
+  text-decoration: underline;
+}
+
+.lp-popover {
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-2);
+  padding: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  animation: lp-fade-up var(--duration-fast) var(--ease-out-soft) both;
+}
+
+.lp-inline-ai {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 16px 0;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 55%, var(--color-border-strong));
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-2);
+  padding: 8px 8px 8px 12px;
+  box-shadow:
+    0 0 0 4px color-mix(in oklab, var(--color-accent) 10%, transparent),
+    0 16px 40px rgba(0, 0, 0, 0.45);
+  animation: lp-fade-up var(--duration-med) var(--ease-out-soft) both;
+}
+
+/* ═════════════ Model Arena ═════════════ */
+
+.lp-model-chip {
+  display: inline-flex;
+  max-width: 260px;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  padding: 0 12px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  transition:
+    border-color var(--duration-fast) ease,
+    background-color var(--duration-fast) ease;
+}
+.lp-model-chip:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+.lp-model-chip.is-on {
+  border-color: var(--color-accent);
+  background: color-mix(in oklab, var(--color-accent) 14%, var(--color-surface));
+  color: var(--color-text);
+}
+.lp-model-chip:disabled {
+  opacity: 0.4;
+}
+
+/* ═════════════ Settings ═════════════ */
+
+.lp-settings-nav {
+  display: flex;
+  width: 220px;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 0 8px 12px;
+}
+.lp-settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  padding: 7px 10px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  text-align: left;
+}
+.lp-settings-nav-item:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.lp-settings-nav-item.is-active {
+  background: color-mix(in oklab, var(--color-accent) 12%, var(--color-surface-2));
+  color: var(--color-text);
+}
+.lp-settings-nav-item.is-active svg {
+  color: var(--color-accent);
+}
+
+.lp-provider-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  padding: 7px 9px;
+  color: var(--color-text-muted);
+  transition: background-color var(--duration-fast) ease;
+}
+.lp-provider-row:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.lp-provider-row.is-active {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+.lp-key-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--color-border-strong);
+}
+.lp-key-dot.is-ok {
+  background: var(--color-ok);
+}
+.lp-key-dot.is-missing {
+  background: var(--color-warn);
+}
+.lp-tier {
+  flex-shrink: 0;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.lp-tier.is-free {
+  background: color-mix(in oklab, var(--color-ok) 18%, transparent);
+  color: #8fdcb2;
+}
+.lp-tier.is-local {
+  background: color-mix(in oklab, var(--color-info) 20%, transparent);
+  color: #a9cdf0;
+}
+.lp-tier.is-paid {
+  background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+  color: #f4c08a;
+}
+.lp-key-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--color-accent) 6%, var(--color-surface)),
+    var(--color-surface)
+  );
+  padding: 12px 14px;
+}
+.lp-preset-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  padding: 10px 12px;
+  transition: border-color var(--duration-fast) ease;
+}
+.lp-preset-card:hover {
+  border-color: var(--color-border-strong);
+}
+.lp-model-tag {
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: transparent;
+  padding: 1px 6px;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.lp-model-tag:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+.lp-model-tag.is-on {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+.lp-chain-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  padding: 8px 10px;
+}
+.lp-chain-num {
+  display: flex;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--color-surface-3);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.lp-chain-num.is-primary {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+@media (max-width: 900px) {
+  .lp-settings-nav {
+    width: 64px;
+  }
+  .lp-settings-nav h1,
+  .lp-settings-nav p {
+    display: none;
+  }
+  .lp-settings-nav-item {
+    justify-content: center;
+    font-size: 0;
+  }
+}

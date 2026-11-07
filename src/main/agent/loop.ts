@@ -8,6 +8,7 @@ import {
 } from '@shared/agent'
 import type { ChatImage, PermissionMode, ToolCall, ChatStreamChunk } from '@shared/types'
 import type { ModelProvider, ProviderChatMessage } from '../providers/base'
+import { delay } from '../providers/retry'
 import { appendAudit } from '../safety/audit'
 import { classifyToolRisk, shouldAutoAllow } from '../safety/permissions'
 import { getTool, listToolDefinitions } from '../tools/registry'
@@ -67,6 +68,12 @@ const PLAN_MAX_INSPECT_STEPS = 2
 const MODEL_TURN_TIMEOUT_MS = 120_000
 /** Abort if the stream goes silent this long between chunks. */
 const MODEL_IDLE_TIMEOUT_MS = 75_000
+/** Retry a failed model turn (transient provider error) at most this many times. */
+const MODEL_TURN_MAX_ATTEMPTS = 3
+/** Max read-only tool calls executed concurrently within one turn. */
+const MAX_PARALLEL_TOOLS = 4
+/** Tools that mutate shared process-global state (browser, screen, servers, MCP) run alone. */
+const SERIAL_TOOL_PREFIX = /^(browser_|screen_|proc_|mcp__)/
 
 /** Quality bar for greenfield app builds — bad scaffolds are the usual failure mode. */
 const BUILD_GUIDE = [
@@ -170,6 +177,8 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
   let sawProviderUsage = false
   let providerPrompt = 0
   let providerCompletion = 0
+  let providerCached = 0
+  let providerReasoning = 0
   let inspectSteps = 0
   let lastToolSig = ''
   let duplicateToolHits = 0
@@ -192,48 +201,97 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
 
     opts.onEvent({ type: 'status', status: 'running' })
 
-    try {
-      for await (const chunk of chatWithWatchdog(opts.provider.chat({
-        messages,
-        tools: turnTools,
-        stream: true,
-        signal: opts.signal
-      }), opts.signal)) {
-        if (opts.signal?.aborted) break
-        if (chunk.type === 'text') {
-          assistantText += chunk.text
-          completionChars += chunk.text.length
-          opts.onEvent({ type: 'thought', text: chunk.text })
-        } else if (chunk.type === 'tool_call') {
-          if (!forcePlanText) toolCalls.push(chunk.toolCall)
-        } else if (chunk.type === 'usage') {
-          sawProviderUsage = true
-          if (chunk.promptTokens != null) providerPrompt = chunk.promptTokens
-          if (chunk.completionTokens != null) providerCompletion += chunk.completionTokens
-          opts.onEvent({
-            type: 'usage',
-            promptTokens: providerPrompt,
-            completionTokens: providerCompletion,
-            totalTokens: providerPrompt + providerCompletion,
-            estimated: false
-          })
-        } else if (chunk.type === 'error') {
-          opts.onEvent({ type: 'error', message: chunk.message })
-          opts.onEvent({ type: 'status', status: 'failed' })
-          opts.onEvent({ type: 'done', summary: chunk.message })
-          return { status: 'failed', summary: chunk.message, plan }
+    let turnFailure: string | null = null
+    let sawOutput = false
+
+    for (let attempt = 1; attempt <= MODEL_TURN_MAX_ATTEMPTS; attempt++) {
+      assistantText = ''
+      toolCalls.length = 0
+      sawOutput = false
+      turnFailure = null
+      let sawUsageThisTurn = false
+      let completionThisTurn = 0
+
+      try {
+        for await (const chunk of chatWithWatchdog(
+          opts.provider.chat({
+            messages,
+            tools: turnTools,
+            stream: true,
+            signal: opts.signal
+          }),
+          opts.signal
+        )) {
+          if (opts.signal?.aborted) break
+          if (chunk.type === 'text') {
+            assistantText += chunk.text
+            completionThisTurn += chunk.text.length
+            sawOutput = true
+            opts.onEvent({ type: 'thought', text: chunk.text })
+          } else if (chunk.type === 'reasoning') {
+            opts.onEvent({ type: 'reasoning', text: chunk.text })
+          } else if (chunk.type === 'tool_call') {
+            if (!forcePlanText) {
+              toolCalls.push(chunk.toolCall)
+              sawOutput = true
+            }
+          } else if (chunk.type === 'usage') {
+            sawUsageThisTurn = true
+            if (chunk.promptTokens != null) providerPrompt = chunk.promptTokens
+            if (chunk.completionTokens != null) providerCompletion += chunk.completionTokens
+            if (chunk.cachedTokens != null) providerCached = chunk.cachedTokens
+            if (chunk.reasoningTokens != null) providerReasoning += chunk.reasoningTokens
+            opts.onEvent({
+              type: 'usage',
+              promptTokens: providerPrompt,
+              completionTokens: providerCompletion,
+              totalTokens: providerPrompt + providerCompletion,
+              cachedTokens: providerCached,
+              reasoningTokens: providerReasoning,
+              estimated: false
+            })
+          } else if (chunk.type === 'error') {
+            turnFailure = chunk.message
+            break
+          }
         }
+      } catch (err) {
+        if (opts.signal?.aborted) {
+          opts.onEvent({ type: 'status', status: 'stopped' })
+          opts.onEvent({ type: 'done', summary: 'Stopped by user' })
+          return { status: 'stopped', summary: 'Stopped by user', plan }
+        }
+        turnFailure = err instanceof Error ? err.message : String(err)
       }
-    } catch (err) {
+
       if (opts.signal?.aborted) {
         opts.onEvent({ type: 'status', status: 'stopped' })
+        opts.onEvent({ type: 'done', summary: 'Stopped by user' })
         return { status: 'stopped', summary: 'Stopped by user', plan }
       }
-      const message = err instanceof Error ? err.message : String(err)
-      opts.onEvent({ type: 'error', message })
+
+      if (turnFailure === null) {
+        if (sawUsageThisTurn) sawProviderUsage = true
+        completionChars += completionThisTurn
+        break
+      }
+
+      // Only retry a turn that produced nothing yet — retrying after partial
+      // text or tool calls would duplicate work.
+      if (!sawOutput && isRetryableTurnError(turnFailure) && attempt < MODEL_TURN_MAX_ATTEMPTS) {
+        opts.onEvent({
+          type: 'notice',
+          level: 'warn',
+          message: `Provider error: ${turnFailure} — retrying (${attempt + 1}/${MODEL_TURN_MAX_ATTEMPTS}).`
+        })
+        await delay(500 * 2 ** (attempt - 1), opts.signal)
+        continue
+      }
+
+      opts.onEvent({ type: 'error', message: turnFailure })
       opts.onEvent({ type: 'status', status: 'failed' })
-      opts.onEvent({ type: 'done', summary: message })
-      return { status: 'failed', summary: message, plan }
+      opts.onEvent({ type: 'done', summary: turnFailure })
+      return { status: 'failed', summary: turnFailure, plan }
     }
 
     if (toolCalls.length === 0) {
@@ -247,74 +305,73 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
       return finishSuccess(opts, plan, summary)
     }
 
-    // Prefer ONE tool per iteration (spec)
-    const call = toolCalls[0]!
     messages.push({
       role: 'assistant',
       content: assistantText,
-      toolCalls: [call]
+      toolCalls
     })
 
-    if (bannedApproaches.has(fuzzySignature(call))) {
-      const blocked: ToolResult = {
-        ok: false,
-        output: '',
-        error: `Blocked: \`${describeCall(call)}\` failed repeatedly. Use a different approach.`
-      }
-      opts.onEvent({ type: 'tool_result', toolCallId: call.id, result: blocked })
-      messages.push({
-        role: 'tool',
-        content: formatToolResult(call, blocked),
-        toolCallId: call.id,
-        toolName: call.name
-      })
-      continue
-    }
-
-    const result = await executeToolCall(call, { ...opts, workspacePath })
+    const batch = await executeToolBatch(toolCalls, { ...opts, workspacePath }, bannedApproaches)
     if (opts.signal?.aborted) {
       opts.onEvent({ type: 'status', status: 'stopped' })
       opts.onEvent({ type: 'done', summary: 'Stopped by user' })
       return { status: 'stopped', summary: 'Stopped by user', plan }
     }
-    promptChars += JSON.stringify(call.arguments).length + result.output.length
-    messages.push({
-      role: 'tool',
-      content: formatToolResult(call, result),
-      toolCallId: call.id,
-      toolName: call.name
-    })
-    const vision = visionFollowUp(result)
-    if (vision) messages.push(vision)
-    const phase = planPhaseForTool(call.name, result.ok)
-    if (phase) {
-      plan = withPlanProgress(plan, phase)
-      opts.onEvent({ type: 'plan', plan })
-    }
 
-    if (!result.ok) {
-      lastError = result.error
-    }
-
-    const sig = toolSignature(call)
-    if (sig === lastToolSig) {
-      duplicateToolHits += 1
-    } else {
-      lastToolSig = sig
-      duplicateToolHits = 0
-    }
-
-    // Near-duplicate guard: models retry the same failing command with tiny flag
-    // tweaks, which burns the whole step budget. Escalate, then ban the approach.
-    const fuzzy = fuzzySignature(call)
-    const attempts = (fuzzyAttempts.get(fuzzy) ?? 0) + 1
-    fuzzyAttempts.set(fuzzy, attempts)
-
-    if (result.ok && attempts === 3 && READ_ONLY_REPEATABLE.has(call.name)) {
+    for (const { call, result } of batch) {
+      promptChars += JSON.stringify(call.arguments).length + result.output.length
       messages.push({
-        role: 'user',
-        content: `You have already run ${call.name} ${attempts} times. You have this information — act on it or finish. Do not inspect again.`
+        role: 'tool',
+        content: formatToolResult(call, result),
+        toolCallId: call.id,
+        toolName: call.name
       })
+      const vision = visionFollowUp(result)
+      if (vision) messages.push(vision)
+      const phase = planPhaseForTool(call.name, result.ok)
+      if (phase) {
+        plan = withPlanProgress(plan, phase)
+        opts.onEvent({ type: 'plan', plan })
+      }
+      if (!result.ok) lastError = result.error
+    }
+
+    // Guards run per call, though a batch still counts as a single step.
+    for (const { call, result } of batch) {
+      const sig = toolSignature(call)
+      if (sig === lastToolSig) {
+        duplicateToolHits += 1
+      } else {
+        lastToolSig = sig
+        duplicateToolHits = 0
+      }
+
+      // Near-duplicate guard: models retry the same failing command with tiny flag
+      // tweaks, which burns the whole step budget. Escalate, then ban the approach.
+      const fuzzy = fuzzySignature(call)
+      const attempts = (fuzzyAttempts.get(fuzzy) ?? 0) + 1
+      fuzzyAttempts.set(fuzzy, attempts)
+
+      if (result.ok && attempts === 3 && READ_ONLY_REPEATABLE.has(call.name)) {
+        messages.push({
+          role: 'user',
+          content: `You have already run ${call.name} ${attempts} times. You have this information — act on it or finish. Do not inspect again.`
+        })
+      }
+
+      if (!result.ok && attempts >= 2) {
+        const bannedNow = attempts >= 3
+        if (bannedNow) bannedApproaches.add(fuzzy)
+        messages.push({
+          role: 'user',
+          content: bannedNow
+            ? `STOP repeating this approach — \`${describeCall(call)}\` has failed ${attempts} times and is now forbidden. ` +
+              (call.name === 'shell_run'
+                ? 'Do not run that generator again. Create the project files yourself with fs_write (package.json, index.html, src files), then run `npm install`.'
+                : 'Use a completely different tool or finish with a short summary explaining what is blocked.')
+            : `\`${describeCall(call)}\` already failed. Changing a flag will not help — switch approach now (for scaffolding, write the files with fs_write instead of running a generator).`
+        })
+      }
     }
 
     const stepsLeft = maxSteps - steps
@@ -326,31 +383,23 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
       })
     }
 
-    if (!result.ok && attempts >= 2) {
-      const banned = attempts >= 3
-      if (banned) bannedApproaches.add(fuzzy)
-      messages.push({
-        role: 'user',
-        content: banned
-          ? `STOP repeating this approach — \`${describeCall(call)}\` has failed ${attempts} times and is now forbidden. ` +
-            (call.name === 'shell_run'
-              ? 'Do not run that generator again. Create the project files yourself with fs_write (package.json, index.html, src files), then run `npm install`.'
-              : 'Use a completely different tool or finish with a short summary explaining what is blocked.')
-          : `\`${describeCall(call)}\` already failed. Changing a flag will not help — switch approach now (for scaffolding, write the files with fs_write instead of running a generator).`
-      })
-      if (banned) continue
-    }
+    const hasWrite = batch.some(
+      ({ call, result }) =>
+        result.ok &&
+        (call.name === 'fs_write' || call.name === 'fs_edit' || call.name === 'code_apply_patch')
+    )
+    const procStart = batch.find(({ call, result }) => result.ok && call.name === 'proc_start')
 
     if (mode === 'plan') {
-      inspectSteps += 1
-      const emptyList =
-        call.name === 'fs_list' &&
-        result.ok &&
-        (/\(empty directory\)/i.test(result.output) || /\b0 entries\b/i.test(result.output))
+      inspectSteps += batch.length
+      const emptyList = batch.some(
+        ({ call, result }) =>
+          call.name === 'fs_list' &&
+          result.ok &&
+          (/\(empty directory\)/i.test(result.output) || /\b0 entries\b/i.test(result.output))
+      )
       const shouldStopInspecting =
-        emptyList ||
-        duplicateToolHits >= 1 ||
-        inspectSteps >= PLAN_MAX_INSPECT_STEPS
+        emptyList || duplicateToolHits >= 1 || inspectSteps >= PLAN_MAX_INSPECT_STEPS
 
       if (shouldStopInspecting) {
         forcePlanText = true
@@ -361,21 +410,18 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
             'Stop inspecting. Output a numbered implementation plan as plain text now. ' +
             'Do not call any tools. Mention that the user should switch to Agent mode to execute.'
         })
-        continue
       }
     } else if (duplicateToolHits >= 1) {
+      const last = batch[batch.length - 1]!
       messages.push({
         role: 'user',
         content:
-          `You already called ${call.name} with the same arguments. Do not repeat it. ` +
-          (result.ok && /\(empty directory\)/i.test(result.output)
+          `You already called ${last.call.name} with the same arguments. Do not repeat it. ` +
+          (last.result.ok && /\(empty directory\)/i.test(last.result.output)
             ? 'The workspace is empty — proceed by creating files with fs_write (and related tools).'
             : 'Use a different approach or finish with a short summary.')
       })
-    } else if (
-      result.ok &&
-      (call.name === 'fs_write' || call.name === 'fs_edit' || call.name === 'code_apply_patch')
-    ) {
+    } else if (hasWrite) {
       // Nudge so cloud models don't hang silently after writing a file.
       messages.push({
         role: 'user',
@@ -383,8 +429,11 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
           ? 'File change applied. Continue: finish the remaining files, then install dependencies with shell_run and start the app with proc_start before summarising. Do not stall.'
           : 'File change applied. Continue with the next concrete step (another write/edit/shell) or finish with a short summary. Do not stall.'
       })
-    } else if (result.ok && call.name === 'proc_start') {
-      const url = typeof result.meta?.previewUrl === 'string' ? result.meta.previewUrl : null
+    } else if (procStart) {
+      const url =
+        typeof procStart.result.meta?.previewUrl === 'string'
+          ? procStart.result.meta.previewUrl
+          : null
       messages.push({
         role: 'user',
         content: url
@@ -556,6 +605,74 @@ function stableArgs(args: Record<string, unknown>): string {
   }
 }
 
+interface ToolBatchEntry {
+  call: ToolCall
+  result: ToolResult
+}
+
+/**
+ * Execute every tool call from one model turn. Read-only, auto-allowed tools run
+ * concurrently (bounded); anything that mutates shared state, needs approval, or
+ * asks the user runs serially so prompts and side effects stay ordered.
+ */
+async function executeToolBatch(
+  calls: ToolCall[],
+  opts: AgentLoopOptions,
+  banned: Set<string>
+): Promise<ToolBatchEntry[]> {
+  const results = new Map<string, ToolResult>()
+  const runnable: ToolCall[] = []
+
+  for (const call of calls) {
+    if (banned.has(fuzzySignature(call))) {
+      const blocked: ToolResult = {
+        ok: false,
+        output: '',
+        error: `Blocked: \`${describeCall(call)}\` failed repeatedly. Use a different approach.`
+      }
+      opts.onEvent({ type: 'tool_result', toolCallId: call.id, result: blocked })
+      results.set(call.id, blocked)
+    } else {
+      runnable.push(call)
+    }
+  }
+
+  if (runnable.length === 1) {
+    const call = runnable[0]!
+    results.set(call.id, await executeToolCall(call, opts))
+  } else if (runnable.length > 1) {
+    const parallel: ToolCall[] = []
+    const serial: ToolCall[] = []
+    for (const call of runnable) {
+      if (isParallelEligible(call, opts)) parallel.push(call)
+      else serial.push(call)
+    }
+    for (let i = 0; i < parallel.length; i += MAX_PARALLEL_TOOLS) {
+      const slice = parallel.slice(i, i + MAX_PARALLEL_TOOLS)
+      const settled = await Promise.all(
+        slice.map(async (call) => ({ call, result: await executeToolCall(call, opts) }))
+      )
+      for (const entry of settled) results.set(entry.call.id, entry.result)
+    }
+    for (const call of serial) {
+      results.set(call.id, await executeToolCall(call, opts))
+    }
+  }
+
+  return calls.map((call) => ({
+    call,
+    result: results.get(call.id) ?? { ok: false, output: '', error: 'not executed' }
+  }))
+}
+
+function isParallelEligible(call: ToolCall, opts: AgentLoopOptions): boolean {
+  if (SERIAL_TOOL_PREFIX.test(call.name)) return false
+  if (call.name === 'ask_user') return false
+  const tool = getTool(call.name)
+  if (!tool || tool.risk !== 'safe') return false
+  return shouldAutoAllow(opts.permissionMode, 'safe')
+}
+
 async function executeToolCall(call: ToolCall, opts: AgentLoopOptions): Promise<ToolResult> {
   const tool = getTool(call.name)
   if (!tool) {
@@ -677,6 +794,12 @@ function formatToolResult(call: ToolCall, result: ToolResult): string {
 
 export function isTransientToolError(message: string): boolean {
   return /timed out|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|ECONNREFUSED/i.test(message)
+}
+
+/** A whole model turn worth retrying (provider rate limit, 5xx, dropped stream). */
+export function isRetryableTurnError(message: string): boolean {
+  if (/HTTP\s+(408|409|425|429|5\d\d)/i.test(message)) return true
+  return isTransientToolError(message)
 }
 
 /** Prior chat turns, with the current goal kept as the last user message. */

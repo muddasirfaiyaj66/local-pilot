@@ -7,11 +7,15 @@ import {
   type ProviderChatParams,
   type ProviderConnectionInfo
 } from './base'
+import { fetchWithRetry } from './retry'
+import { readSseLines } from './sse'
 
 interface OpenAIChatCompletionChunk {
   choices?: Array<{
     delta?: {
       content?: string | null
+      reasoning_content?: string | null
+      reasoning?: string | null
       tool_calls?: Array<{
         index?: number
         id?: string
@@ -20,6 +24,13 @@ interface OpenAIChatCompletionChunk {
     }
     finish_reason?: string | null
   }>
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    total_tokens?: number
+    prompt_tokens_details?: { cached_tokens?: number }
+    completion_tokens_details?: { reasoning_tokens?: number }
+  }
   error?: { message?: string }
 }
 
@@ -40,23 +51,30 @@ export class OpenAICompatProvider implements ModelProvider {
     const body = {
       model: this.info.model,
       stream: true,
+      stream_options: { include_usage: true },
       messages: params.messages.map(toOpenAIMessage),
       ...(params.tools && params.tools.length > 0
         ? { tools: params.tools.map(toOpenAITool), tool_choice: 'auto' }
-        : {})
+        : {}),
+      ...(this.info.maxTokens ? { max_tokens: this.info.maxTokens } : {})
     }
 
     let response: Response
     try {
-      response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.info.apiKey ? { Authorization: `Bearer ${this.info.apiKey}` } : {})
+      response = await fetchWithRetry(
+        url,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(this.info.headers ?? {}),
+            ...(this.info.apiKey ? { Authorization: `Bearer ${this.info.apiKey}` } : {})
+          },
+          body: JSON.stringify(body),
+          signal: params.signal
         },
-        body: JSON.stringify(body),
-        signal: params.signal
-      })
+        { signal: params.signal }
+      )
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       yield { type: 'error', message: `Request failed: ${message}` }
@@ -77,10 +95,7 @@ export class OpenAICompatProvider implements ModelProvider {
       return
     }
 
-    const pendingTools = new Map<
-      number,
-      { id: string; name: string; arguments: string }
-    >()
+    const pendingTools = new Map<number, { id: string; name: string; arguments: string }>()
     let finishReason: string | undefined
 
     for await (const line of readSseLines(response.body, params.signal)) {
@@ -95,12 +110,28 @@ export class OpenAICompatProvider implements ModelProvider {
         yield { type: 'error', message: redactSecrets(parsed.error.message) }
         return
       }
+
+      if (parsed.usage) {
+        yield {
+          type: 'usage',
+          promptTokens: parsed.usage.prompt_tokens,
+          completionTokens: parsed.usage.completion_tokens,
+          totalTokens: parsed.usage.total_tokens,
+          cachedTokens: parsed.usage.prompt_tokens_details?.cached_tokens,
+          reasoningTokens: parsed.usage.completion_tokens_details?.reasoning_tokens
+        }
+      }
+
       const choice = parsed.choices?.[0]
       if (!choice) continue
 
       const delta = choice.delta
       if (delta?.content) {
         yield { type: 'text', text: delta.content }
+      }
+      const reasoning = delta?.reasoning_content ?? delta?.reasoning
+      if (reasoning) {
+        yield { type: 'reasoning', text: reasoning }
       }
       if (delta?.tool_calls) {
         for (const tc of delta.tool_calls) {
@@ -114,7 +145,12 @@ export class OpenAICompatProvider implements ModelProvider {
             })
           } else {
             if (tc.id) existing.id = tc.id
-            if (tc.function?.name) existing.name += tc.function.name
+            // Providers either stream the name in pieces or resend the full name.
+            const nameDelta = tc.function?.name
+            if (nameDelta) {
+              if (!existing.name) existing.name = nameDelta
+              else if (!existing.name.endsWith(nameDelta)) existing.name += nameDelta
+            }
             if (tc.function?.arguments) existing.arguments += tc.function.arguments
           }
         }
@@ -141,8 +177,12 @@ export class OpenAICompatProvider implements ModelProvider {
 
   async listModels(): Promise<string[]> {
     const url = joinUrl(this.info.baseUrl, '/models')
-    const response = await fetch(url, {
-      headers: this.info.apiKey ? { Authorization: `Bearer ${this.info.apiKey}` } : {}
+    const response = await fetchWithRetry(url, {
+      headers: {
+        ...(this.info.headers ?? {}),
+        ...(this.info.apiKey ? { Authorization: `Bearer ${this.info.apiKey}` } : {})
+      },
+      signal: AbortSignal.timeout(15_000)
     })
     if (!response.ok) {
       throw new Error(`Failed to list models: HTTP ${response.status}`)
@@ -237,36 +277,4 @@ export function redactSecrets(text: string): string {
     .replace(/sk-[a-zA-Z0-9_-]{10,}/g, 'sk-***')
     .replace(/Bearer\s+[a-zA-Z0-9._-]+/gi, 'Bearer ***')
     .replace(/api[_-]?key["\s:=]+[a-zA-Z0-9._-]+/gi, 'api_key=***')
-}
-
-async function* readSseLines(
-  body: ReadableStream<Uint8Array>,
-  signal?: AbortSignal
-): AsyncGenerator<string, void, unknown> {
-  const reader = body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-
-  try {
-    while (true) {
-      if (signal?.aborted) break
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const parts = buffer.split('\n')
-      buffer = parts.pop() ?? ''
-      for (const raw of parts) {
-        const line = raw.trimEnd()
-        if (!line || line.startsWith(':')) continue
-        if (line.startsWith('data:')) {
-          yield line.slice(5).trimStart()
-        }
-      }
-    }
-    if (buffer.trim().startsWith('data:')) {
-      yield buffer.trim().slice(5).trimStart()
-    }
-  } finally {
-    reader.releaseLock()
-  }
 }

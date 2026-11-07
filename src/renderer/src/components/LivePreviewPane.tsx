@@ -2,15 +2,18 @@ import {
   ArrowClockwise,
   ArrowSquareOut,
   Browser,
+  Code,
   ListBullets,
   Monitor,
   Stop
 } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore, type VisionClick, type VisionFrame } from '../store/appStore'
-import type { WorkspaceTreeNode } from '@shared/ipc'
+import { RepoEditor } from './RepoEditor'
 
-type Tab = 'app' | 'screen' | 'log' | 'files'
+type Tab = 'app' | 'screen' | 'log' | 'code'
+
+const TAB_ORDER: Tab[] = ['app', 'screen', 'log', 'code']
 
 export function LivePreviewPane(): React.JSX.Element {
   const timeline = useAppStore((s) => s.timeline)
@@ -30,19 +33,12 @@ export function LivePreviewPane(): React.JSX.Element {
   const [previewError, setPreviewError] = useState<string | null>(null)
   const visionFrame = useAppStore((s) => s.visionFrame)
   const visionClick = useAppStore((s) => s.visionClick)
-  const [tree, setTree] = useState<WorkspaceTreeNode[]>([])
   const frameBoxRef = useRef<HTMLDivElement>(null)
   const [frameBox, setFrameBox] = useState({ w: 0, h: 0 })
-  const queueComposerInsert = useAppStore((s) => s.queueComposerInsert)
   const workspace = settings?.workspacePath?.trim()
   const folderName = workspace
     ? workspace.replace(/\\/g, '/').split('/').filter(Boolean).pop()
     : null
-
-  useEffect(() => {
-    if (tab !== 'files' || !workspace) return
-    void window.localpilot.workspaceTree().then(setTree).catch(() => setTree([]))
-  }, [tab, workspace])
 
   useEffect(() => {
     const el = frameBoxRef.current
@@ -93,11 +89,28 @@ export function LivePreviewPane(): React.JSX.Element {
     }
   }, [isStreaming, tab])
 
+  const onTabsKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    const keys = ['ArrowRight', 'ArrowLeft', 'Home', 'End']
+    if (!keys.includes(event.key)) return
+    event.preventDefault()
+    const index = TAB_ORDER.indexOf(tab)
+    let next = index
+    if (event.key === 'ArrowRight') next = (index + 1) % TAB_ORDER.length
+    else if (event.key === 'ArrowLeft') next = (index - 1 + TAB_ORDER.length) % TAB_ORDER.length
+    else if (event.key === 'Home') next = 0
+    else next = TAB_ORDER.length - 1
+    setTab(TAB_ORDER[next]!)
+    event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
+  }
+
   return (
     <aside className="lp-context-pane" aria-label="Context">
-      <div className="lp-context-tabs">
+      <div className="lp-context-tabs" role="tablist" aria-label="Context" onKeyDown={onTabsKeyDown}>
         <button
           type="button"
+          role="tab"
+          aria-selected={tab === 'app'}
+          tabIndex={tab === 'app' ? 0 : -1}
           className={tab === 'app' ? 'lp-context-tab is-active' : 'lp-context-tab'}
           onClick={() => setTab('app')}
         >
@@ -109,6 +122,9 @@ export function LivePreviewPane(): React.JSX.Element {
         </button>
         <button
           type="button"
+          role="tab"
+          aria-selected={tab === 'screen'}
+          tabIndex={tab === 'screen' ? 0 : -1}
           className={tab === 'screen' ? 'lp-context-tab is-active' : 'lp-context-tab'}
           onClick={() => setTab('screen')}
         >
@@ -117,6 +133,9 @@ export function LivePreviewPane(): React.JSX.Element {
         </button>
         <button
           type="button"
+          role="tab"
+          aria-selected={tab === 'log'}
+          tabIndex={tab === 'log' ? 0 : -1}
           className={tab === 'log' ? 'lp-context-tab is-active' : 'lp-context-tab'}
           onClick={() => setTab('log')}
         >
@@ -125,10 +144,14 @@ export function LivePreviewPane(): React.JSX.Element {
         </button>
         <button
           type="button"
-          className={tab === 'files' ? 'lp-context-tab is-active' : 'lp-context-tab'}
-          onClick={() => setTab('files')}
+          role="tab"
+          aria-selected={tab === 'code'}
+          tabIndex={tab === 'code' ? 0 : -1}
+          className={tab === 'code' ? 'lp-context-tab is-active' : 'lp-context-tab'}
+          onClick={() => setTab('code')}
         >
-          Files
+          <Code size={12} aria-hidden />
+          Code
         </button>
         <div className="flex-1" />
         {folderName ? (
@@ -141,6 +164,7 @@ export function LivePreviewPane(): React.JSX.Element {
         ) : null}
       </div>
 
+      <div role="tabpanel" id={`lp-panel-${tab}`} className="contents">
       {tab === 'app' ? (
         <div className="flex min-h-0 flex-1 flex-col">
           {running.length > 0 && (
@@ -260,21 +284,8 @@ export function LivePreviewPane(): React.JSX.Element {
             Refresh
           </button>
         </div>
-      ) : tab === 'files' ? (
-        <ul className="min-h-0 flex-1 overflow-y-auto p-2 font-[var(--font-mono)] text-[11px] text-[var(--color-text-muted)]">
-          {tree.length === 0 ? (
-            <li className="px-1 py-3 text-[var(--color-text-faint)]">Open a folder to see its files.</li>
-          ) : (
-            tree.map((node) => (
-              <li key={node.path} className="mb-1">
-                <TreeRow node={node} onInsert={queueComposerInsert} />
-                {node.children?.map((child) => (
-                  <TreeRow key={child.path} node={child} nested onInsert={queueComposerInsert} />
-                ))}
-              </li>
-            ))
-          )}
-        </ul>
+      ) : tab === 'code' ? (
+        <RepoEditor />
       ) : (
         <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
           {timeline.length === 0 && (
@@ -300,38 +311,8 @@ export function LivePreviewPane(): React.JSX.Element {
           ))}
         </ul>
       )}
-    </aside>
-  )
-}
-
-function TreeRow({
-  node,
-  nested,
-  onInsert
-}: {
-  node: WorkspaceTreeNode
-  nested?: boolean
-  onInsert: (text: string) => void
-}): React.JSX.Element {
-  const label = `${node.name}${node.dir ? '/' : ''}`
-  if (node.dir) {
-    return (
-      <div className={nested ? 'pl-3 text-[var(--color-text-faint)]' : 'text-[var(--color-text)]'}>
-        {label}
       </div>
-    )
-  }
-  return (
-    <button
-      type="button"
-      className={`block max-w-full truncate text-left hover:text-[var(--color-accent)] ${
-        nested ? 'pl-3 text-[var(--color-text-faint)]' : 'text-[var(--color-text)]'
-      }`}
-      title={`Insert @${node.path}`}
-      onClick={() => onInsert(`@${node.path} `)}
-    >
-      {label}
-    </button>
+    </aside>
   )
 }
 

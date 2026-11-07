@@ -23,7 +23,23 @@ import { runAgentLoop } from '../agent/loop'
 import { createProvider } from '../providers/registry'
 import { readRecentAudit } from '../safety/audit'
 import type { SettingsStore } from '../settings'
-import { listWorkspaceTree, readWorkspaceText, searchWorkspaceFiles } from '../tools/browse'
+import {
+  createWorkspaceEntry,
+  deleteWorkspaceEntry,
+  listWorkspaceTree,
+  listWorkspaceChildren,
+  readWorkspaceFileForEdit,
+  renameWorkspaceEntry,
+  searchWorkspaceFiles,
+  searchWorkspaceText,
+  writeWorkspaceText
+} from '../tools/browse'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import type { ModelProvider } from '../providers/base'
+import { FallbackProvider, type FallbackEntry, type FallbackNotice } from '../providers/fallback'
+import { PluginStore } from '../plugins/store'
+import { killAllTerminals, killTerminal, runTerminalCommand, writeTerminalInput } from '../terminal'
 import { loadMcpTools, readMcpConfig, writeMcpConfig } from '../tools/mcp'
 import { refreshDynamicTools } from '../tools/registry'
 import { restoreWorkspaceFile } from '../tools/restore'
@@ -59,6 +75,7 @@ function abortAgentSession(requestId: string): void {
 }
 
 export function registerIpcHandlers(store: SettingsStore): void {
+  registerIdeHandlers(store)
   const idSchema = z.string().min(1).max(120)
   ipcMain.handle(IpcChannels.workflowList, () => listDefinitions())
   ipcMain.handle(IpcChannels.workflowSave, (_event, raw: unknown) => {
@@ -195,10 +212,31 @@ export function registerIpcHandlers(store: SettingsStore): void {
       return []
     }
   })
-  ipcMain.handle(IpcChannels.workspaceReadFile, (_e, filePath: string) => {
+  ipcMain.handle(IpcChannels.workspaceChildren, (_e, path: string) => {
+    const workspace = store.getSettings().workspacePath
+    if (!workspace.trim()) return []
+    try {
+      return listWorkspaceChildren(workspace, String(path ?? ''))
+    } catch {
+      return []
+    }
+  })
+  ipcMain.handle(IpcChannels.workspaceReadFile, (_e, filePath: string, maxChars?: number) => {
     try {
       const workspace = store.getSettings().workspacePath
-      return { ok: true, text: readWorkspaceText(workspace, filePath) }
+      const limit = typeof maxChars === 'number' && maxChars > 0 ? Math.min(maxChars, 2_000_000) : 8_000
+      const file = readWorkspaceFileForEdit(workspace, filePath, limit)
+      return { ok: true, ...file }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+  ipcMain.handle(IpcChannels.workspaceWriteFile, (_e, filePath: string, content: string) => {
+    try {
+      const workspace = store.getSettings().workspacePath
+      if (!workspace.trim()) return { ok: false, error: 'No workspace open' }
+      writeWorkspaceText(workspace, filePath, String(content ?? ''))
+      return { ok: true }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
@@ -322,7 +360,15 @@ export function registerIpcHandlers(store: SettingsStore): void {
     }
 
     void (async () => {
-      const provider = createProvider(providerConfig, store.getApiKey(request.providerId))
+      const provider = buildProviderChain(store, request.providerId, (notice) =>
+        send({
+          requestId,
+          chunk: {
+            type: 'notice',
+            message: `${notice.from} failed (${notice.reason.slice(0, 160)}) — switched to ${notice.to}`
+          }
+        })
+      )
       let finished = false
       try {
         for await (const chunk of provider.chat({
@@ -419,7 +465,16 @@ export function registerIpcHandlers(store: SettingsStore): void {
     }
 
     void (async () => {
-      const provider = createProvider(providerConfig, store.getApiKey(request.providerId))
+      const provider = buildProviderChain(store, request.providerId, (notice) =>
+        emit({
+          requestId,
+          event: {
+            type: 'notice',
+            level: 'warn',
+            message: `${notice.from} failed (${notice.reason.slice(0, 160)}) — switched to ${notice.to}`
+          }
+        })
+      )
       try {
         // Re-read settings so Open Folder / workspace edits apply even if start was queued.
         const latest = store.getSettings()
@@ -473,7 +528,144 @@ export function registerIpcHandlers(store: SettingsStore): void {
   })
 }
 
+/**
+ * The active provider, wrapped with the configured fallback chain. Fallbacks
+ * that are disabled, missing, or the same as the primary are skipped.
+ */
+function buildProviderChain(
+  store: SettingsStore,
+  primaryId: string,
+  onFallback: (notice: FallbackNotice) => void
+): ModelProvider {
+  const primary = store.getProvider(primaryId)
+  if (!primary) throw new Error(`Provider not found: ${primaryId}`)
+  const entries: FallbackEntry[] = [
+    {
+      label: `${primary.name} · ${primary.model}`,
+      provider: createProvider(primary, store.getApiKey(primary.id))
+    }
+  ]
+  for (const id of store.getSettings().fallbackProviderIds) {
+    if (id === primaryId) continue
+    const config = store.getProvider(id)
+    if (!config?.enabled) continue
+    entries.push({
+      label: `${config.name} · ${config.model}`,
+      provider: createProvider(config, store.getApiKey(config.id))
+    })
+  }
+  return entries.length === 1 ? entries[0]!.provider : new FallbackProvider(entries, onFallback)
+}
+
+function registerIdeHandlers(store: SettingsStore): void {
+  const workspaceOrThrow = (): string => {
+    const workspace = store.getSettings().workspacePath.trim()
+    if (!workspace) throw new Error('No workspace open')
+    return workspace
+  }
+  const wrap = async (fn: () => void | Promise<void>): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      await fn()
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  }
+  const pathSchema = z.string().min(1).max(1024)
+
+  ipcMain.handle(IpcChannels.workspaceSearchText, (_e, query: unknown, options: unknown) => {
+    const workspace = store.getSettings().workspacePath.trim()
+    if (!workspace) return []
+    const opts = z
+      .object({
+        caseSensitive: z.boolean().optional(),
+        regex: z.boolean().optional(),
+        wholeWord: z.boolean().optional(),
+        maxResults: z.number().int().positive().max(2000).optional()
+      })
+      .catch({})
+      .parse(options ?? {})
+    try {
+      return searchWorkspaceText(workspace, String(query ?? '').slice(0, 500), opts)
+    } catch {
+      return [] // invalid regex, unreadable root
+    }
+  })
+  ipcMain.handle(IpcChannels.workspaceCreate, (_e, path: unknown, dir: unknown) =>
+    wrap(() => createWorkspaceEntry(workspaceOrThrow(), pathSchema.parse(path), dir === true))
+  )
+  ipcMain.handle(IpcChannels.workspaceRename, (_e, from: unknown, to: unknown) =>
+    wrap(() => renameWorkspaceEntry(workspaceOrThrow(), pathSchema.parse(from), pathSchema.parse(to)))
+  )
+  ipcMain.handle(IpcChannels.workspaceDelete, (_e, path: unknown) =>
+    wrap(() => deleteWorkspaceEntry(workspaceOrThrow(), pathSchema.parse(path)))
+  )
+
+  ipcMain.handle(IpcChannels.terminalRun, (event, command: unknown) => {
+    try {
+      const line = z.string().min(1).max(8000).parse(command)
+      const workspace = store.getSettings().workspacePath.trim() || app.getPath('home')
+      const send = (channel: string, payload: unknown): void => {
+        if (!event.sender.isDestroyed()) event.sender.send(channel, payload)
+      }
+      const id = runTerminalCommand(line, workspace, {
+        data: (termId, stream, text) => send(IpcChannels.terminalData, { id: termId, stream, text }),
+        exit: (termId, code) => send(IpcChannels.terminalExit, { id: termId, code })
+      })
+      return { ok: true, id }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+  ipcMain.handle(IpcChannels.terminalInput, (_e, id: unknown, text: unknown) => ({
+    ok: writeTerminalInput(String(id), String(text ?? ''))
+  }))
+  ipcMain.handle(IpcChannels.terminalKill, (_e, id: unknown) => ({ ok: killTerminal(String(id)) }))
+
+  const pluginDir = join(app.getPath('userData'), 'plugins')
+  const plugins = new PluginStore(pluginDir, {
+    read: () => readMcpConfig(),
+    write: async (config) => {
+      writeMcpConfig(config)
+      refreshDynamicTools(await loadMcpTools())
+    },
+    workspace: () => store.getSettings().workspacePath.trim()
+  })
+  ipcMain.handle(IpcChannels.pluginList, () => plugins.list())
+  ipcMain.handle(IpcChannels.pluginInstall, (_e, manifest: unknown) =>
+    wrap(async () => {
+      await plugins.install(manifest)
+    })
+  )
+  ipcMain.handle(IpcChannels.pluginUninstall, (_e, id: unknown) =>
+    wrap(() => plugins.uninstall(String(id)))
+  )
+  ipcMain.handle(IpcChannels.pluginSetEnabled, (_e, id: unknown, enabled: unknown) =>
+    wrap(() => plugins.setEnabled(String(id), enabled === true))
+  )
+  ipcMain.handle(IpcChannels.pluginImport, async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const opts: OpenDialogOptions = {
+      title: 'Install plugin from file',
+      buttonLabel: 'Install',
+      properties: ['openFile'],
+      filters: [{ name: 'LocalPilot plugin', extensions: ['json'] }]
+    }
+    const result = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true }
+    return wrap(async () => {
+      const raw = JSON.parse(readFileSync(result.filePaths[0]!, 'utf8')) as unknown
+      await plugins.install(raw)
+    })
+  })
+  ipcMain.handle(IpcChannels.pluginOpenFolder, async () => {
+    const error = await shell.openPath(pluginDir)
+    return { ok: error === '' }
+  })
+}
+
 export function abortAllStreams(): void {
+  killAllTerminals()
   cancelAllWorkflows()
   for (const [id, controller] of activeStreams) {
     controller.abort()

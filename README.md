@@ -23,7 +23,10 @@ LocalPilot is an Electron desktop app that pairs a chat UI with an agent loop. Y
 - **Modes:** Chat (conversation), Plan (read-only inspect + proposed steps), Agent (tools that change the world)
 - **Open Folder workspace** — Agent/Plan file and shell tools are sandboxed to the selected project
 - **Multi-agent** — parallel agents across chats; per-chat stop and stop-all; kill switch aborts every run
-- **Providers** — Ollama (local/cloud tags) and OpenAI-compatible endpoints; API keys via Electron `safeStorage`
+- **Providers** — Ollama (local/cloud tags), OpenAI-compatible endpoints, and native Anthropic + Google Gemini; API keys via Electron `safeStorage`
+- **Parallel tools** — read-only tools the model batches in one turn run concurrently (bounded); state-changing tools stay serial
+- **Resilient runs** — transient provider failures (rate limits, 5xx, dropped streams) are retried with backoff, and retries are surfaced in the transcript
+- **Reasoning** — thinking/reasoning output streams into a collapsible “Thinking” block when the model exposes it
 - **Run what it builds** — background dev servers (`proc_start` / `proc_logs` / `proc_stop`) with the detected `localhost` URL rendered in the App preview tab
 - **Browser** — Playwright with a persistent profile (or attach via `LOCALPILOT_CDP_URL`)
 - **Screen** — desktop control + live preview; vision coordinate grounding for VL models
@@ -35,6 +38,18 @@ LocalPilot is an Electron desktop app that pairs a chat UI with an agent loop. Y
 - **Flow Engine** — design and run validated workflow graphs with AI, tool, condition, approval, delay, and nested workflow nodes; monitor runs and add local automation triggers
 - **Model routing** — optionally route simple, complex, and image tasks to configured providers; selecting a model manually turns routing off
 - **Safety** — permission modes, Approve/Deny previews, audit log with secret redaction, kill switch `Ctrl/Cmd+Shift+.`
+
+## Keyboard shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl/Cmd+K` | Command palette |
+| `Ctrl/Cmd+N` | New chat |
+| `Ctrl/Cmd+1` / `2` / `3` | Chat / Settings / Flow Engine |
+| `Ctrl/Cmd+,` | Settings |
+| `Ctrl/Cmd+B` | Toggle session list |
+| `Ctrl/Cmd+J` | Toggle inspector |
+| `Ctrl/Cmd+Shift+.` | Kill switch (stop all agents) |
 
 ## Requirements
 
@@ -103,7 +118,7 @@ Built-in defaults ship as **Gemma 4 (cloud)** and **Kimi K3 (cloud)** on Ollama�
 
 ```
 src/main/agent/       Agent loop, planner, memory
-src/main/providers/   Ollama, OpenAI-compatible (Anthropic/Gemini via gateway)
+src/main/providers/   Ollama, OpenAI-compatible, native Anthropic + Gemini (retry/backoff, SSE)
 src/main/tools/       fs, shell, background processes, code, browser, screen, media, MCP, memory
 src/main/safety/      Permissions, kill switch, audit log
 src/main/workflow/    Graph validation, execution, persistence, triggers

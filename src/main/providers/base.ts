@@ -23,6 +23,10 @@ export interface ProviderConnectionInfo {
   baseUrl: string
   apiKey?: string
   model: string
+  maxTokens?: number
+  headers?: Record<string, string>
+  /** Ask reasoning-capable models to expose their thinking stream. */
+  reasoningEnabled?: boolean
 }
 
 /**

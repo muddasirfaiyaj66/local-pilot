@@ -13,8 +13,12 @@ import {
   type RunningProcess,
   type MemoryNoteRow,
   type UpdateCheckResult,
-  type WorkspaceTreeNode
+  type WorkspaceTreeNode,
+  type TextSearchHit,
+  type TerminalDataEvent,
+  type TerminalExitEvent
 } from '../shared/ipc'
+import type { InstalledPlugin } from '../shared/plugins'
 import type { AgentStartRequest } from '../shared/agent'
 import type { AppSettings, ChatRequest, ProviderConfig, TestConnectionResult } from '../shared/types'
 import type { WorkflowDefinition, WorkflowRun } from '../shared/workflow'
@@ -126,14 +130,54 @@ const api: LocalPilotApi = {
   stopProcess: (id: string) =>
     ipcRenderer.invoke(IpcChannels.procStop, id) as Promise<{ ok: boolean }>,
   workspaceTree: () => ipcRenderer.invoke(IpcChannels.workspaceTree) as Promise<WorkspaceTreeNode[]>,
+  workspaceChildren: (path: string) =>
+    ipcRenderer.invoke(IpcChannels.workspaceChildren, path) as Promise<WorkspaceTreeNode[]>,
   searchWorkspaceFiles: (query: string) =>
     ipcRenderer.invoke(IpcChannels.workspaceSearchFiles, query) as Promise<string[]>,
-  readWorkspaceFile: (path: string) =>
-    ipcRenderer.invoke(IpcChannels.workspaceReadFile, path) as Promise<{
+  readWorkspaceFile: (path: string, maxChars?: number) =>
+    ipcRenderer.invoke(IpcChannels.workspaceReadFile, path, maxChars) as Promise<{
       ok: boolean
       text?: string
       error?: string
     }>,
+  writeWorkspaceFile: (path: string, content: string) =>
+    ipcRenderer.invoke(IpcChannels.workspaceWriteFile, path, content) as Promise<{
+      ok: boolean
+      error?: string
+    }>,
+  searchWorkspaceText: (query, options) =>
+    ipcRenderer.invoke(IpcChannels.workspaceSearchText, query, options) as Promise<TextSearchHit[]>,
+  createWorkspaceEntry: (path, dir) =>
+    ipcRenderer.invoke(IpcChannels.workspaceCreate, path, dir) as Promise<{ ok: boolean; error?: string }>,
+  renameWorkspaceEntry: (from, to) =>
+    ipcRenderer.invoke(IpcChannels.workspaceRename, from, to) as Promise<{ ok: boolean; error?: string }>,
+  deleteWorkspaceEntry: (path) =>
+    ipcRenderer.invoke(IpcChannels.workspaceDelete, path) as Promise<{ ok: boolean; error?: string }>,
+  runTerminal: (command) =>
+    ipcRenderer.invoke(IpcChannels.terminalRun, command) as Promise<{ ok: boolean; id?: string; error?: string }>,
+  writeTerminal: (id, text) =>
+    ipcRenderer.invoke(IpcChannels.terminalInput, id, text) as Promise<{ ok: boolean }>,
+  killTerminal: (id) => ipcRenderer.invoke(IpcChannels.terminalKill, id) as Promise<{ ok: boolean }>,
+  onTerminalData: (handler) => {
+    const listener = (_event: IpcRendererEvent, data: TerminalDataEvent): void => handler(data)
+    ipcRenderer.on(IpcChannels.terminalData, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.terminalData, listener)
+  },
+  onTerminalExit: (handler) => {
+    const listener = (_event: IpcRendererEvent, data: TerminalExitEvent): void => handler(data)
+    ipcRenderer.on(IpcChannels.terminalExit, listener)
+    return () => ipcRenderer.removeListener(IpcChannels.terminalExit, listener)
+  },
+  listPlugins: () => ipcRenderer.invoke(IpcChannels.pluginList) as Promise<InstalledPlugin[]>,
+  installPlugin: (manifest) =>
+    ipcRenderer.invoke(IpcChannels.pluginInstall, manifest) as Promise<{ ok: boolean; error?: string }>,
+  uninstallPlugin: (id) =>
+    ipcRenderer.invoke(IpcChannels.pluginUninstall, id) as Promise<{ ok: boolean; error?: string }>,
+  setPluginEnabled: (id, enabled) =>
+    ipcRenderer.invoke(IpcChannels.pluginSetEnabled, id, enabled) as Promise<{ ok: boolean; error?: string }>,
+  importPlugin: () =>
+    ipcRenderer.invoke(IpcChannels.pluginImport) as Promise<{ ok: boolean; error?: string; canceled?: boolean }>,
+  openPluginFolder: () => ipcRenderer.invoke(IpcChannels.pluginOpenFolder) as Promise<{ ok: boolean }>,
   listProviderModels: (providerId: string) =>
     ipcRenderer.invoke(IpcChannels.providerModels, providerId) as Promise<string[]>,
   getMcpConfig: () =>

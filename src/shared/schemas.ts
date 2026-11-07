@@ -16,7 +16,13 @@ export const ProviderConfigSchema = z.object({
   /** API key is stored encrypted; this flag only indicates presence */
   hasApiKey: z.boolean().default(false),
   visionEnabled: z.boolean().default(false),
-  enabled: z.boolean().default(true)
+  enabled: z.boolean().default(true),
+  /** Upper bound on generated tokens per turn (native Anthropic/Gemini require it). */
+  maxTokens: z.number().int().positive().optional(),
+  /** Extra request headers (Azure api-version, organization, proxies). */
+  headers: z.record(z.string()).optional(),
+  /** Ask reasoning-capable models to stream their thinking. */
+  reasoningEnabled: z.boolean().optional()
 })
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>
 
@@ -57,14 +63,21 @@ export type ToolCall = z.infer<typeof ToolCallSchema>
 /** Streaming chunks from any provider */
 export const ChatStreamChunkSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), text: z.string() }),
+  z.object({ type: z.literal('reasoning'), text: z.string() }),
   z.object({ type: z.literal('tool_call'), toolCall: ToolCallSchema }),
   z.object({
     type: z.literal('usage'),
     promptTokens: z.number().optional(),
     completionTokens: z.number().optional(),
-    totalTokens: z.number().optional()
+    totalTokens: z.number().optional(),
+    /** Prompt tokens served from a provider-side cache. */
+    cachedTokens: z.number().optional(),
+    /** Completion tokens spent on reasoning/thinking. */
+    reasoningTokens: z.number().optional()
   }),
   z.object({ type: z.literal('error'), message: z.string() }),
+  /** Out-of-band status (e.g. switched to a fallback provider); not model output. */
+  z.object({ type: z.literal('notice'), message: z.string() }),
   z.object({ type: z.literal('done'), finishReason: z.string().optional() })
 ])
 export type ChatStreamChunk = z.infer<typeof ChatStreamChunkSchema>
@@ -95,6 +108,11 @@ export const AppSettingsSchema = z.object({
     strongProviderId: z.string().default(''),
     visionProviderId: z.string().default('')
   }).default({}),
+  /**
+   * Providers tried in order when the active one fails before producing output
+   * (bad key, exhausted free quota, server down).
+   */
+  fallbackProviderIds: z.array(z.string()).max(8).default([]),
   workflows: z.array(z.object({
     id: z.string(),
     name: z.string().min(1).max(80),

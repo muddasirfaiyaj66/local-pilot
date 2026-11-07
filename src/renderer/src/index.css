@@ -6,26 +6,46 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-bg: #0a0a0a;
-  --color-surface: #111111;
-  --color-surface-2: #171717;
-  --color-hover: #1f1f1f;
-  --color-border: #2a2a2a;
-  --color-border-strong: #3a3a3a;
-  --color-text: #e4e4e4;
-  --color-text-muted: #8a8a8a;
-  --color-text-faint: #5c5c5c;
-  --color-accent: #3b82f6;
-  --color-accent-2: #2563eb;
-  --color-on-accent: #ffffff;
-  --color-danger: #ef4444;
+  /* Instrument-panel palette — warm near-black canvas, copper accent.
+     Warm-tinted neutrals (chroma under 0.02) read as authored, not empty. */
+  --color-bg: #0b0b0c;
+  --color-surface: #121214;
+  --color-surface-2: #17171a;
+  --color-surface-3: #1e1e22;
+  --color-hover: #202127;
+  --color-border: #26262b;
+  --color-border-strong: #35353c;
+  --color-text: #e9e7e4;
+  --color-text-muted: #a29d95;
+  --color-text-faint: #84807a;
+  --color-accent: #e8963c;
+  --color-accent-2: #cf8531;
+  --color-on-accent: #0b0b0c;
+  --color-danger: #e5484d;
   --color-warn: #eab308;
-  --color-ok: #22c55e;
+  --color-ok: #46b17b;
+  --color-info: #5b9bd5;
   --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* Spacing — 4px base (1-4-9 rhythm: 4 / 16 / 36) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-9: 36px;
+
+  /* Edge language — hairline frames, tight radii */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Motion */
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
   --duration-fast: 140ms;
   --duration-med: 220ms;
+  --duration-slow: 320ms;
 }
 
 * {
@@ -64,8 +84,9 @@ select:disabled {
 }
 
 :focus-visible {
-  outline: 1px solid var(--color-accent);
-  outline-offset: 1px;
+  outline: 2px solid color-mix(in oklab, var(--color-accent) 85%, transparent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -83,8 +104,11 @@ select:disabled {
   height: 5px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2e2e2e;
-  border-radius: 3px;
+  background: var(--color-border-strong);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--color-text-faint) 70%, var(--color-border-strong));
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -119,8 +143,7 @@ select:disabled {
   border-color: var(--color-border-strong);
 }
 .lp-input:focus {
-  border-color: var(--color-accent);
-  outline: none;
+  border-color: color-mix(in oklab, var(--color-accent) 60%, var(--color-border-strong));
 }
 .lp-input::placeholder {
   color: var(--color-text-faint);
@@ -138,7 +161,7 @@ select:disabled {
   padding: 0 18px 0 6px;
   border-radius: 4px;
   max-width: 148px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='%235c5c5c' viewBox='0 0 256 256'%3E%3Cpath d='M213.66 101.66l-80 80a8 8 0 01-11.32 0l-80-80a8 8 0 0111.32-11.32L128 164.69l74.34-74.35a8 8 0 0111.32 11.32z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='%2384807a' viewBox='0 0 256 256'%3E%3Cpath d='M213.66 101.66l-80 80a8 8 0 01-11.32 0l-80-80a8 8 0 0111.32-11.32L128 164.69l74.34-74.35a8 8 0 0111.32 11.32z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 3px center;
   transition:
@@ -237,9 +260,9 @@ select:disabled {
   margin: 0 auto;
   width: 100%;
   max-width: 760px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: color-mix(in oklab, var(--color-surface-2) 92%, #000);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--color-surface-2) 94%, #000);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 4px 16px rgba(0, 0, 0, 0.28);
   transition:
     border-color var(--duration-med) var(--ease-out-soft),
@@ -429,19 +452,39 @@ select:disabled {
 .lp-btn {
   display: inline-flex;
   align-items: center;
-  height: 22px;
-  padding: 0 8px;
-  border-radius: 4px;
+  justify-content: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   background: transparent;
   color: var(--color-text-muted);
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease,
+    color var(--duration-fast) ease,
+    transform var(--duration-fast) var(--ease-out-soft);
+}
+.lp-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.lp-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 .lp-btn:hover:not(:disabled) {
   background: var(--color-hover);
   color: var(--color-text);
+}
+.lp-btn-sm {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
 }
 .lp-btn-accent {
   border-color: transparent;
@@ -655,8 +698,8 @@ details[open] > .lp-plan-summary::before {
 
 .lp-context-pane {
   display: flex;
-  width: 280px;
-  flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
   flex-direction: column;
   border-left: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -832,4 +875,210 @@ details[open] > .lp-plan-summary::before {
   border-color: color-mix(in oklab, var(--color-accent) 40%, var(--color-border));
   color: var(--color-accent);
   background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+}
+
+/* —— Panels, badges, kbd —— */
+
+.lp-panel {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.lp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+}
+.lp-badge.is-accent {
+  border-color: color-mix(in oklab, var(--color-accent) 40%, var(--color-border));
+  color: var(--color-accent);
+  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+}
+.lp-badge.is-danger {
+  border-color: color-mix(in oklab, var(--color-danger) 40%, var(--color-border));
+  color: #f0a0a2;
+  background: color-mix(in oklab, var(--color-danger) 10%, transparent);
+}
+.lp-badge.is-warn {
+  border-color: color-mix(in oklab, var(--color-warn) 40%, var(--color-border));
+  color: var(--color-warn);
+  background: color-mix(in oklab, var(--color-warn) 10%, transparent);
+}
+.lp-badge.is-ok {
+  border-color: color-mix(in oklab, var(--color-ok) 40%, var(--color-border));
+  color: #7fd0a6;
+  background: color-mix(in oklab, var(--color-ok) 10%, transparent);
+}
+
+.lp-kbd {
+  display: inline-flex;
+  align-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border: 1px solid var(--color-border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+}
+
+/* —— Resizable pane handles —— */
+
+.lp-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background-color var(--duration-fast) ease;
+  z-index: 20;
+}
+.lp-resize-handle:hover,
+.lp-resize-handle.is-dragging {
+  background: color-mix(in oklab, var(--color-accent) 45%, transparent);
+}
+
+/* —— Status bar —— */
+
+.lp-statusbar {
+  display: flex;
+  height: 24px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 0 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* —— Command palette —— */
+
+.lp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+.lp-palette {
+  position: fixed;
+  top: 14vh;
+  left: 50%;
+  z-index: 61;
+  width: min(560px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-2);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  animation: lp-enter var(--duration-med) var(--ease-out-soft) both;
+}
+.lp-palette-input {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  padding: 12px 14px;
+  color: var(--color-text);
+  font-size: 14px;
+  outline: none;
+}
+.lp-palette-list {
+  max-height: min(360px, 50vh);
+  overflow-y: auto;
+  padding: 6px;
+}
+.lp-palette-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  text-align: left;
+}
+.lp-palette-item[data-active='true'] {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
+/* —— Motion system: 3-beat entrance —— */
+
+@keyframes lp-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-1px) scale(1.005);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.lp-enter {
+  animation: lp-enter var(--duration-med) var(--ease-out-soft) both;
+}
+.lp-modal {
+  animation: lp-enter var(--duration-med) var(--ease-out-soft) both;
+}
+
+/* Native controls adopt the token system */
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--color-accent);
+}
+textarea,
+input,
+select {
+  color-scheme: dark;
+}
+
+/* —— Responsive: shed chrome as the window narrows —— */
+
+@media (max-width: 1080px) {
+  .lp-pane-inspector {
+    display: none;
+  }
+}
+@media (max-width: 820px) {
+  .lp-pane-session {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .lp-icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+  .lp-btn {
+    min-height: 36px;
+  }
 }
