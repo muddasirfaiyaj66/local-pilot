@@ -6,6 +6,7 @@ import { WorkflowDefinitionSchema } from '@shared/workflow'
 import type { WorkflowTriggerConfig } from '@shared/workflowTriggers'
 import { Dialog } from '../components/ui/Dialog'
 import { Button } from '../components/ui/Button'
+import { createProjectAssistantTemplate } from './projectAssistantTemplate'
 
 const kinds: WorkflowNodeKind[] = ['input', 'agent', 'tool', 'condition', 'approval', 'delay', 'output', 'subworkflow', 'custom']
 const terminal = new Set(['succeeded', 'failed', 'cancelled'])
@@ -407,6 +408,7 @@ export function WorkflowPage(): React.JSX.Element {
     <aside className="flex w-56 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] p-3">
       <div className="mb-3 flex items-center justify-between"><h1 className="text-sm font-semibold">Workflows</h1><button className="lp-icon-btn" title="New workflow" aria-label="New workflow" onClick={() => { setDefinition(fresh()); setSelected(null); setRunId(null); setErrors([]) }}><Plus size={16} /></button></div>
       <div className="min-h-0 flex-1 overflow-y-auto">
+        <button className="lp-btn mb-2 w-full justify-center text-xs" onClick={() => { setDefinition(createProjectAssistantTemplate()); setSelected(null); setRunId(null); setErrors([]); setDryRun(null); setInputText('{"request":"Describe the project change","constraints":[]}'); setMessage('Template ready. Edit the task input, review the nodes, then save and dry run.') }}>New project assistant</button>
         {definitions.map((item) => <div key={item.id} className="mb-1 flex items-center gap-1 rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1">
           <button className="min-w-0 flex-1 truncate px-1 text-left text-xs" title={item.name} onClick={() => { setDefinition(item); setSelected(null); setRunId(null); setErrors([]) }}>{item.name}</button>
           <button className="lp-icon-btn !h-6 !w-6" title={`Delete ${item.name}`} aria-label={`Delete ${item.name}`} onClick={() => askConfirm(`Delete workflow “${item.name}”?`, () => { void window.localpilot.deleteWorkflowDefinition(item.id).then(() => { if (definition.id === item.id) { setDefinition(fresh()); setSelected(null); setRunId(null) } return refresh() }).catch((error: unknown) => setMessage(String(error))) })}><Trash size={12} /></button>
