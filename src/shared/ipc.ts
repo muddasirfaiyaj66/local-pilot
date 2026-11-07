@@ -12,6 +12,7 @@ import type {
 } from './agent'
 import type { WorkflowDefinition, WorkflowRun } from './workflow'
 import type { WorkflowTriggerConfig } from './workflowTriggers'
+import type { InstalledPlugin } from './plugins'
 
 /** IPC channel names — single source of truth for main/preload/renderer */
 export const IpcChannels = {
@@ -43,8 +44,25 @@ export const IpcChannels = {
   procList: 'proc:list',
   procStop: 'proc:stop',
   workspaceTree: 'workspace:tree',
+  workspaceChildren: 'workspace:children',
   workspaceSearchFiles: 'workspace:search-files',
   workspaceReadFile: 'workspace:read-file',
+  workspaceWriteFile: 'workspace:write-file',
+  workspaceSearchText: 'workspace:search-text',
+  workspaceCreate: 'workspace:create',
+  workspaceRename: 'workspace:rename',
+  workspaceDelete: 'workspace:delete',
+  terminalRun: 'terminal:run',
+  terminalInput: 'terminal:input',
+  terminalKill: 'terminal:kill',
+  terminalData: 'terminal:data',
+  terminalExit: 'terminal:exit',
+  pluginList: 'plugin:list',
+  pluginInstall: 'plugin:install',
+  pluginUninstall: 'plugin:uninstall',
+  pluginSetEnabled: 'plugin:set-enabled',
+  pluginImport: 'plugin:import',
+  pluginOpenFolder: 'plugin:open-folder',
   providerModels: 'provider:models',
   mcpGet: 'mcp:get',
   mcpSave: 'mcp:save',
@@ -164,8 +182,25 @@ export interface LocalPilotApi {
   listProcesses: () => Promise<RunningProcess[]>
   stopProcess: (id: string) => Promise<{ ok: boolean }>
   workspaceTree: () => Promise<WorkspaceTreeNode[]>
+  workspaceChildren: (path: string) => Promise<WorkspaceTreeNode[]>
   searchWorkspaceFiles: (query: string) => Promise<string[]>
-  readWorkspaceFile: (path: string) => Promise<{ ok: boolean; text?: string; error?: string }>
+  readWorkspaceFile: (path: string, maxChars?: number) => Promise<WorkspaceFileRead>
+  writeWorkspaceFile: (path: string, content: string) => Promise<{ ok: boolean; error?: string }>
+  searchWorkspaceText: (query: string, options?: TextSearchOptions) => Promise<TextSearchHit[]>
+  createWorkspaceEntry: (path: string, dir: boolean) => Promise<{ ok: boolean; error?: string }>
+  renameWorkspaceEntry: (from: string, to: string) => Promise<{ ok: boolean; error?: string }>
+  deleteWorkspaceEntry: (path: string) => Promise<{ ok: boolean; error?: string }>
+  runTerminal: (command: string) => Promise<{ ok: boolean; id?: string; error?: string }>
+  writeTerminal: (id: string, text: string) => Promise<{ ok: boolean }>
+  killTerminal: (id: string) => Promise<{ ok: boolean }>
+  onTerminalData: (handler: (event: TerminalDataEvent) => void) => () => void
+  onTerminalExit: (handler: (event: TerminalExitEvent) => void) => () => void
+  listPlugins: () => Promise<InstalledPlugin[]>
+  installPlugin: (manifest: unknown) => Promise<{ ok: boolean; error?: string }>
+  uninstallPlugin: (id: string) => Promise<{ ok: boolean; error?: string }>
+  setPluginEnabled: (id: string, enabled: boolean) => Promise<{ ok: boolean; error?: string }>
+  importPlugin: () => Promise<{ ok: boolean; error?: string; canceled?: boolean }>
+  openPluginFolder: () => Promise<{ ok: boolean }>
   listProviderModels: (providerId: string) => Promise<string[]>
   getMcpConfig: () => Promise<{ servers: McpServerConfig[] }>
   saveMcpConfig: (
@@ -181,6 +216,41 @@ export interface WorkspaceTreeNode {
   path: string
   dir: boolean
   children?: WorkspaceTreeNode[]
+}
+
+export interface WorkspaceFileRead {
+  ok: boolean
+  text?: string
+  /** The file is longer than maxChars; `text` is only the head. Never save it back. */
+  truncated?: boolean
+  /** The file looks binary (NUL bytes); `text` is empty. */
+  binary?: boolean
+  error?: string
+}
+
+export interface TextSearchOptions {
+  caseSensitive?: boolean
+  regex?: boolean
+  wholeWord?: boolean
+  maxResults?: number
+}
+
+export interface TextSearchHit {
+  path: string
+  line: number
+  column: number
+  preview: string
+}
+
+export interface TerminalDataEvent {
+  id: string
+  stream: 'stdout' | 'stderr'
+  text: string
+}
+
+export interface TerminalExitEvent {
+  id: string
+  code: number | null
 }
 
 export interface MemoryNoteRow {

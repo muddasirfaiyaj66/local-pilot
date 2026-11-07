@@ -110,13 +110,20 @@ export function Composer({
   )
   const showAgentHint = interactionMode === 'plan' && looksLikeCreate
 
-  const onPick = async (files: FileList | null): Promise<void> => {
+  const onPick = async (files: File[] | null): Promise<void> => {
     if (!files) return
-    for (const file of Array.from(files)) {
+    for (const file of files) {
       if (file.size > 8_000_000) continue
       const att = await readFileAsAttachment(file)
       addAttachment(att)
     }
+  }
+
+  const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>): void => {
+    const images = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith('image/'))
+    if (images.length === 0) return
+    e.preventDefault()
+    void onPick(images)
   }
 
   return (
@@ -130,7 +137,7 @@ export function Composer({
         }}
         onDrop={(e) => {
           e.preventDefault()
-          void onPick(e.dataTransfer.files)
+          void onPick(Array.from(e.dataTransfer.files))
         }}
       >
         {attachments.length > 0 && (
@@ -206,6 +213,7 @@ export function Composer({
             syncMention(e.target.value, e.target.selectionStart ?? e.target.value.length)
           }}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           rows={2}
           placeholder={
             interactionMode === 'plan'
@@ -279,7 +287,7 @@ export function Composer({
             className="hidden"
             multiple
             onChange={(e) => {
-              void onPick(e.target.files)
+              void onPick(Array.from(e.target.files ?? []))
               e.target.value = ''
             }}
           />
@@ -289,7 +297,7 @@ export function Composer({
             className="hidden"
             multiple
             onChange={(e) => {
-              void onPick(e.target.files)
+              void onPick(Array.from(e.target.files ?? []))
               e.target.value = ''
             }}
           />

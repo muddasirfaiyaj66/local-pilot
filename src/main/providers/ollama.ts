@@ -8,11 +8,13 @@ import {
   type ProviderConnectionInfo
 } from './base'
 import { joinUrl, OpenAICompatProvider, redactSecrets } from './openaiCompat'
+import { fetchWithRetry } from './retry'
 
 interface OllamaChatResponse {
   message?: {
     role?: string
     content?: string
+    thinking?: string
     tool_calls?: Array<{
       function?: { name?: string; arguments?: Record<string, unknown> | string }
     }>
@@ -49,6 +51,8 @@ export class OllamaProvider implements ModelProvider {
       model: this.info.model,
       stream: true,
       messages: params.messages.map(toOllamaMessage),
+      ...(this.info.maxTokens ? { options: { num_predict: this.info.maxTokens } } : {}),
+      ...(this.info.reasoningEnabled ? { think: true } : {}),
       ...(params.tools && params.tools.length > 0
         ? { tools: params.tools.map((t) => ({ type: 'function', function: t })) }
         : {})
@@ -56,12 +60,16 @@ export class OllamaProvider implements ModelProvider {
 
     let response: Response
     try {
-      response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: params.signal
-      })
+      response = await fetchWithRetry(
+        url,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: params.signal
+        },
+        { signal: params.signal }
+      )
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       yield { type: 'error', message: `Ollama request failed: ${message}` }
@@ -107,6 +115,10 @@ export class OllamaProvider implements ModelProvider {
           if (parsed.error) {
             yield { type: 'error', message: redactSecrets(parsed.error) }
             return
+          }
+          const thinking = parsed.message?.thinking
+          if (thinking) {
+            yield { type: 'reasoning', text: thinking }
           }
           const content = parsed.message?.content
           if (content) {

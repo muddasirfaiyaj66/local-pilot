@@ -22,7 +22,7 @@ async function expandFileMentions(content: string): Promise<string> {
       const result = await window.localpilot.readWorkspaceFile(rel)
       notes.push(
         result.ok && result.text
-          ? `[Referenced file: ${rel}]\n\`\`\`\n${result.text.slice(0, 8_000)}\n\`\`\``
+          ? `[Referenced file: ${rel}${result.truncated ? ' — first 8000 chars' : ''}]\n\`\`\`\n${result.text.slice(0, 8_000)}\n\`\`\``
           : `[Referenced file: ${rel}]`
       )
     } catch {
@@ -37,6 +37,7 @@ function newId(): string {
 }
 
 export type InteractionMode = 'chat' | 'agent' | 'plan'
+export type AppView = 'chat' | 'settings' | 'workflow' | 'code' | 'arena'
 
 export interface TaskSummary {
   id: string
@@ -107,6 +108,8 @@ export interface TaskRun {
   kind: 'chat' | 'agent' | 'plan' | null
   isStreaming: boolean
   streamingText: string
+  /** Model reasoning/thinking stream, kept out of the final answer. */
+  reasoningText: string
   pendingPermission: (PermissionRequest & { agentRequestId: string }) | null
   error: string | null
 }
@@ -135,10 +138,11 @@ interface AppState {
   requestToTask: Record<string, string>
   messages: ChatMessage[]
   streamingText: string
+  reasoningText: string
   isStreaming: boolean
   activeRequestId: string | null
   error: string | null
-  view: 'chat' | 'settings' | 'workflow'
+  view: AppView
   testResult: TestConnectionResult | null
   interactionMode: InteractionMode
   plan: AgentPlan | null
@@ -163,7 +167,11 @@ interface AppState {
   refreshProcesses: () => Promise<void>
   stopProcess: (id: string) => Promise<void>
   init: () => Promise<void>
-  setView: (view: 'chat' | 'settings' | 'workflow') => void
+  setView: (view: AppView) => void
+  /** A file another pane asked the code editor to open. */
+  editorOpenRequest: { path: string; line?: number; nonce: number } | null
+  openInEditor: (path: string, line?: number) => void
+  clearEditorOpenRequest: () => void
   setInteractionMode: (mode: InteractionMode) => void
   setPermissionMode: (mode: PermissionMode) => Promise<void>
   setMaxAgentSteps: (steps: number) => Promise<void>
@@ -180,6 +188,8 @@ interface AppState {
     apiKey?: string
   ) => Promise<void>
   testProvider: (id: string) => Promise<void>
+  deleteProvider: (id: string) => Promise<void>
+  setFallbackProviders: (ids: string[]) => Promise<void>
   newTask: () => void
   selectTask: (id: string) => void
   deleteTask: (id: string) => void
@@ -207,6 +217,7 @@ const emptyRun = (): TaskRun => ({
   kind: null,
   isStreaming: false,
   streamingText: '',
+  reasoningText: '',
   pendingPermission: null,
   error: null
 })
@@ -240,6 +251,7 @@ function snapshotActive(s: AppState): TaskSession | null {
       kind: frozenRunKind(s),
       isStreaming: s.isStreaming,
       streamingText: s.streamingText,
+      reasoningText: s.reasoningText,
       pendingPermission: s.pendingPermission,
       error: s.error
     }
@@ -353,6 +365,7 @@ function hydrateFromSession(session: TaskSession): Partial<AppState> {
     checkpoint: session.checkpoint,
     editedPlanTitles: session.editedPlanTitles,
     streamingText: session.run.streamingText,
+    reasoningText: session.run.reasoningText ?? '',
     isStreaming: session.run.isStreaming,
     activeRequestId: session.run.requestId,
     pendingPermission: session.run.pendingPermission,
@@ -411,8 +424,19 @@ function bindGlobalListeners(get: Get, set: Set): void {
         ...prev,
         run: { ...prev.run, streamingText: prev.run.streamingText + chunk.text }
       }))
+    } else if (chunk.type === 'reasoning') {
+      patchTask(set, taskId, (prev) => ({
+        ...prev,
+        run: { ...prev.run, reasoningText: prev.run.reasoningText + chunk.text }
+      }))
     } else if (chunk.type === 'usage') {
       applyUsageToTask(set, taskId, chunk, false, get)
+    } else if (chunk.type === 'notice') {
+      const entry: TimelineEntry = { id: newId(), kind: 'status', text: chunk.message, at: Date.now() }
+      patchTask(set, taskId, (prev) => ({
+        ...prev,
+        timeline: [...prev.timeline, entry].slice(-80)
+      }))
     } else if (chunk.type === 'error') {
       patchTask(set, taskId, (prev) => ({
         ...prev,
@@ -572,6 +596,22 @@ function bindGlobalListeners(get: Get, set: Set): void {
           pendingChanges
         }
       })
+    } else if (event.type === 'reasoning') {
+      patchTask(set, taskId, (prev) => ({
+        ...prev,
+        run: { ...prev.run, reasoningText: prev.run.reasoningText + event.text }
+      }))
+    } else if (event.type === 'notice') {
+      const entry: TimelineEntry = {
+        id: newId(),
+        kind: 'status',
+        text: event.message,
+        at: Date.now()
+      }
+      patchTask(set, taskId, (prev) => ({
+        ...prev,
+        timeline: [...prev.timeline, entry].slice(-80)
+      }))
     } else if (event.type === 'usage') {
       applyUsageToTask(set, taskId, event, event.estimated === true, get)
     } else if (event.type === 'permission_required') {
@@ -649,6 +689,7 @@ export const useAppStore = create<AppState>((set, get) => {
   requestToTask: {},
   messages: [],
   streamingText: '',
+  reasoningText: '',
   isStreaming: false,
   activeRequestId: null,
   error: null,
@@ -707,6 +748,10 @@ export const useAppStore = create<AppState>((set, get) => {
   },
 
   setView: (view) => set({ view, testResult: null }),
+  editorOpenRequest: null,
+  openInEditor: (path, line) =>
+    set({ view: 'code', editorOpenRequest: { path, line, nonce: Date.now() } }),
+  clearEditorOpenRequest: () => set({ editorOpenRequest: null }),
   setInteractionMode: (interactionMode) => set({ interactionMode }),
   setAskDraft: (askDraft) => set({ askDraft }),
 
@@ -791,7 +836,24 @@ export const useAppStore = create<AppState>((set, get) => {
   },
 
   testProvider: async (id) => {
+    set({ testResult: null })
     set({ testResult: await window.localpilot.testProvider(id) })
+  },
+
+  deleteProvider: async (id) => {
+    await window.localpilot.deleteProvider(id)
+    const remainingFallbacks = (get().settings?.fallbackProviderIds ?? []).filter((f) => f !== id)
+    await window.localpilot.setSettings({ fallbackProviderIds: remainingFallbacks })
+    const [providers, settings] = await Promise.all([
+      window.localpilot.listProviders(),
+      window.localpilot.getSettings()
+    ])
+    set({ providers, settings })
+  },
+
+  setFallbackProviders: async (ids) => {
+    const settings = await window.localpilot.setSettings({ fallbackProviderIds: ids })
+    set({ settings })
   },
 
   runningTaskIds: () =>
@@ -1143,6 +1205,7 @@ export const useAppStore = create<AppState>((set, get) => {
             kind: 'chat',
             isStreaming: true,
             streamingText: '',
+            reasoningText: '',
             pendingPermission: null,
             error: null
           }
@@ -1174,6 +1237,7 @@ export const useAppStore = create<AppState>((set, get) => {
             kind: runKind,
             isStreaming: true,
             streamingText: '',
+            reasoningText: '',
             pendingPermission: null,
             error: null
           }

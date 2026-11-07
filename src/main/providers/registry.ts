@@ -1,5 +1,7 @@
 import type { ProviderConfig } from '@shared/types'
 import type { ModelProvider } from './base'
+import { AnthropicProvider } from './anthropic'
+import { GeminiProvider } from './gemini'
 import { OllamaProvider } from './ollama'
 import { OpenAICompatProvider } from './openaiCompat'
 
@@ -10,17 +12,20 @@ export function createProvider(
   const info = {
     baseUrl: config.baseUrl,
     apiKey,
-    model: config.model
+    model: config.model,
+    maxTokens: config.maxTokens,
+    headers: config.headers,
+    reasoningEnabled: config.reasoningEnabled
   }
 
   switch (config.kind) {
     case 'ollama':
       return new OllamaProvider(info)
-    case 'openai-compat':
     case 'anthropic':
+      return new AnthropicProvider(info)
     case 'gemini':
-      // Phase 1: Anthropic/Gemini route through OpenAI-compat gateways
-      // (OpenRouter / proxies). Native SDKs land in later phases.
+      return new GeminiProvider(info)
+    case 'openai-compat':
       return new OpenAICompatProvider(info)
     default: {
       throw new Error(`Unknown provider kind: ${String(config.kind)}`)
@@ -37,7 +42,8 @@ export const DEFAULT_PROVIDERS: Array<Omit<ProviderConfig, 'hasApiKey'> & { hasA
       baseUrl: 'http://127.0.0.1:11434',
       model: 'gemma4:31b-cloud',
       visionEnabled: true,
-      enabled: true
+      enabled: true,
+      reasoningEnabled: false
     },
     {
       id: 'ollama-kimi',
@@ -46,7 +52,8 @@ export const DEFAULT_PROVIDERS: Array<Omit<ProviderConfig, 'hasApiKey'> & { hasA
       baseUrl: 'http://127.0.0.1:11434',
       model: 'kimi-k3:cloud',
       visionEnabled: false,
-      enabled: true
+      enabled: true,
+      reasoningEnabled: false
     },
     {
       id: 'openai-compat',
@@ -55,6 +62,27 @@ export const DEFAULT_PROVIDERS: Array<Omit<ProviderConfig, 'hasApiKey'> & { hasA
       baseUrl: 'https://api.openai.com/v1',
       model: 'gpt-4o-mini',
       visionEnabled: true,
-      enabled: true
+      enabled: true,
+      reasoningEnabled: false
+    },
+    {
+      id: 'anthropic',
+      kind: 'anthropic',
+      name: 'Anthropic Claude',
+      baseUrl: 'https://api.anthropic.com',
+      model: 'claude-sonnet-4-5',
+      visionEnabled: true,
+      enabled: false,
+      reasoningEnabled: false
+    },
+    {
+      id: 'gemini',
+      kind: 'gemini',
+      name: 'Google Gemini',
+      baseUrl: 'https://generativelanguage.googleapis.com',
+      model: 'gemini-2.0-flash',
+      visionEnabled: true,
+      enabled: false,
+      reasoningEnabled: false
     }
   ]

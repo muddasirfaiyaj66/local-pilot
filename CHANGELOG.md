@@ -2,6 +2,43 @@
 
 All notable changes to LocalPilot will be documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Code view** (`Ctrl/Cmd+2`): a VS Code-style editor built on Monaco — file explorer with create/rename/delete-to-trash, tabs with dirty markers, breadcrumbs, minimap, sticky scroll, quick open (`Ctrl+P`), find in files with case/word/regex, an integrated terminal panel, "Run file" (`Ctrl+F5`), and editor themes/font/minimap/format-on-save settings
+- **Inline AI edits** (`Ctrl/Cmd+I`): rewrite the selection with the active model, review a side-by-side diff, accept as one undoable edit; "Ask about selection in chat" (`Ctrl+Shift+L`)
+- **Plugins & Extensions marketplace**: declarative JSON plugins that add editor themes, snippets, AI prompt commands (chat or inline), and MCP servers; 12 built-in plugins, install from file, or create one from a template. Plugins never run code inside the app
+- **Provider gallery** with 21 presets — free keys (Groq, Gemini, OpenRouter free models, Cerebras, Mistral, GitHub Models, NVIDIA NIM, Hugging Face, SambaNova, Cohere), local runtimes (Ollama, LM Studio, llama.cpp, Jan), and paid APIs (OpenAI, Anthropic, DeepSeek, xAI, Together, Fireworks, Perplexity) — each with a "Get key" link, model quick-picks, and key status
+- **Fallback chain**: when the active provider fails before answering (bad key, exhausted quota, outage), the request moves to the next configured provider and a notice says so
+- **Model Arena** (`Ctrl/Cmd+4`): send one prompt to up to four models at once and compare time-to-first-token, total time, throughput, and answers; vote to build a local leaderboard
+- Settings reorganised into sections (Models & keys, Fallback chain, Workspace & agent, Appearance, MCP, Memory, Audit, About)
+
+### Fixed
+
+- Dialog panels sat below their own backdrop, so clicks inside approvals and other modals were swallowed
+- Editors no longer risk saving a truncated buffer over a large file: reads report `truncated`/`binary` and such files open read-only
+
+- Agent runs execute every tool the model requests in a turn: independent read-only tools run in parallel (bounded), while state-changing or approval-gated tools stay serial
+- A model turn that fails transiently (rate limit, 5xx, dropped connection) is retried with jittered backoff before the run gives up, and the retry is surfaced as a notice
+- Native Anthropic (Messages API) and Google Gemini (generateContent) providers, with real tool calling, image input, and usage; OpenAI-compatible gateways still work via the `openai-compat` kind
+- Reasoning/thinking output is streamed and shown in a collapsible "Thinking" block (OpenAI `reasoning_content`, Anthropic thinking deltas, Ollama `thinking`, Gemini thought parts)
+- Provider config gains optional `maxTokens`, extra `headers`, and a `reasoningEnabled` toggle; usage now reports cached and reasoning tokens
+- A render error boundary so one broken pane cannot blank the app
+
+### Changed
+
+- New design-token system: warm near-black surfaces with a copper accent, a 4px spacing scale, an expanded type/motion scale, and a visible 2px focus ring on every control
+- The chat shell is now a resizable operator console: drag handles resize the session list and inspector, panes collapse from the title bar, and a bottom status bar shows model, mode, tokens, servers, and agents
+- A smaller ABI-friendly virtualization pass keeps long transcripts fast, and the transcript only announces new messages to screen readers
+- Approvals, the command palette, and Flow Engine confirmations use a proper dialog with focus trap, Escape, and focus restore
+- Softer responsive behavior: the inspector and session list drop away as the window narrows
+
+### Added
+
+- Command palette (`Ctrl/Cmd+K`) with keyboard shortcuts for chat, settings, Flow Engine, new chat, and pane toggling
+- Paste images straight into the composer
+
 ## [0.16.0] — 2026-10-03
 
 ### Fixed

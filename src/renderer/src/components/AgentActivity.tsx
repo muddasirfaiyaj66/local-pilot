@@ -1,4 +1,4 @@
-import { CaretRight, CheckCircle, CircleNotch, Wrench, XCircle } from '@phosphor-icons/react'
+import { Brain, CaretRight, CheckCircle, CircleNotch, Wrench, XCircle } from '@phosphor-icons/react'
 import { useState } from 'react'
 import type { TimelineEntry } from '../store/appStore'
 import { Markdown } from './Markdown'
@@ -6,19 +6,23 @@ import { Markdown } from './Markdown'
 interface AgentActivityProps {
   timeline: TimelineEntry[]
   streamingText: string
+  reasoningText?: string
   isStreaming: boolean
   busyLabel: string
 }
 
-/** Live agent turn: collapsible tool exploration plus the streaming answer. */
+/** Live agent turn: reasoning, collapsible tool exploration, then the streaming answer. */
 export function AgentActivity({
   timeline,
   streamingText,
+  reasoningText = '',
   isStreaming,
   busyLabel
 }: AgentActivityProps): React.JSX.Element | null {
   const [openTools, setOpenTools] = useState(false)
+  const [openReasoning, setOpenReasoning] = useState(false)
   const text = streamingText.trim()
+  const reasoning = reasoningText.trim()
   const toolPairs = pairTools(timeline)
 
   if (!isStreaming && toolPairs.length === 0) return null
@@ -28,6 +32,32 @@ export function AgentActivity({
 
   return (
     <div className="flex flex-col gap-2 lp-msg-enter">
+      {reasoning && (
+        <div className="lp-agent-block">
+          <button
+            type="button"
+            className="lp-agent-block-head"
+            onClick={() => setOpenReasoning((v) => !v)}
+            aria-expanded={openReasoning}
+          >
+            <CaretRight
+              size={11}
+              className={`shrink-0 text-[var(--color-text-faint)] transition-transform duration-150 ${openReasoning ? 'rotate-90' : ''}`}
+              aria-hidden
+            />
+            <Brain size={12} className="text-[var(--color-info)]" aria-hidden />
+            <span className="truncate text-[12px] font-medium text-[var(--color-text-muted)]">
+              Thinking…
+            </span>
+          </button>
+          {openReasoning && (
+            <pre className="lp-agent-block-body max-h-64 overflow-y-auto whitespace-pre-wrap font-[var(--font-mono)] text-[11px] leading-relaxed text-[var(--color-text-muted)]">
+              {reasoning}
+            </pre>
+          )}
+        </div>
+      )}
+
       {toolPairs.length > 0 && (
         <div className="lp-agent-block">
           <button

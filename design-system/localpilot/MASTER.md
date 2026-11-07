@@ -29,23 +29,30 @@ Match **Cursor / VS Code agent** feel:
 
 ## Tokens
 
+Instrument-panel palette: warm near-black canvas, copper interactive accent.
+Brand mark stays blue; the interactive accent is intentionally not the generic tech blue.
+
 | Role | Hex | Variable |
 |------|-----|----------|
-| Background | `#0a0a0a` | `--bg` |
-| Surface | `#111111` | `--surface` |
-| Surface raised | `#171717` | `--surface-2` |
-| Hover | `#1f1f1f` | `--hover` |
-| Border | `#2a2a2a` | `--border` |
-| Border strong | `#3a3a3a` | `--border-strong` |
-| Text | `#e4e4e4` | `--text` |
-| Text muted | `#8a8a8a` | `--text-muted` |
-| Text faint | `#5c5c5c` | `--text-faint` |
-| Accent | `#3b82f6` | `--accent` |
-| Accent muted | `#2563eb` | `--accent-2` |
-| On accent | `#ffffff` | `--on-accent` |
-| Danger | `#ef4444` | `--danger` |
-| Warn | `#eab308` | `--warn` |
-| Success | `#22c55e` | `--ok` |
+| Background | `#0b0b0c` | `--color-bg` |
+| Surface | `#121214` | `--color-surface` |
+| Surface raised | `#17171a` | `--color-surface-2` |
+| Surface 3 | `#1e1e22` | `--color-surface-3` |
+| Hover | `#202127` | `--color-hover` |
+| Border | `#26262b` | `--color-border` |
+| Border strong | `#35353c` | `--color-border-strong` |
+| Text | `#e9e7e4` | `--color-text` |
+| Text muted | `#a29d95` | `--color-text-muted` |
+| Text faint | `#84807a` | `--color-text-faint` |
+| Accent | `#e8963c` | `--color-accent` |
+| Accent muted | `#cf8531` | `--color-accent-2` |
+| On accent | `#0b0b0c` | `--color-on-accent` |
+| Danger | `#e5484d` | `--color-danger` |
+| Warn | `#eab308` | `--color-warn` |
+| Success | `#46b17b` | `--color-ok` |
+| Info | `#5b9bd5` | `--color-info` |
+
+Scales: spacing `--space-1/2/3/4/6/9` (4px base), radii `--radius-sm/md/lg`, motion `--duration-fast/med/slow` + `--ease-out-soft`. Focus ring is a 2px accent outline with 2px offset.
 
 ---
 

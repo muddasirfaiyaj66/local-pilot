@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ChatStreamChunk } from '@shared/types'
@@ -438,6 +438,95 @@ describe('runAgentLoop', () => {
     } finally {
       rmSync(ws, { recursive: true, force: true })
     }
+  })
+
+  it('executes every read-only tool call from a single turn', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lp-parallel-'))
+    writeFileSync(join(dir, 'a.txt'), 'alpha')
+    writeFileSync(join(dir, 'b.txt'), 'bravo')
+    try {
+      const provider = new ScriptedProvider([
+        [
+          { type: 'tool_call', toolCall: { id: 'r1', name: 'fs_read', arguments: { path: 'a.txt' } } },
+          { type: 'tool_call', toolCall: { id: 'r2', name: 'fs_read', arguments: { path: 'b.txt' } } },
+          { type: 'done', finishReason: 'tool_calls' }
+        ],
+        [{ type: 'text', text: 'Read both files.' }, { type: 'done', finishReason: 'stop' }]
+      ])
+
+      const results: Array<{ id: string; output: string }> = []
+      const result = await runAgentLoop({
+        provider,
+        goal: 'Read both files',
+        workspacePath: dir,
+        permissionMode: 'autonomous',
+        maxSteps: 4,
+        onEvent: (e) => {
+          if (e.type === 'tool_result') results.push({ id: e.toolCallId, output: e.result.output })
+        },
+        requestPermission: async () => true,
+        askUser: async () => 'yes'
+      })
+
+      expect(result.status).toBe('success')
+      expect(results).toHaveLength(2)
+      expect(results.find((r) => r.id === 'r1')?.output).toContain('alpha')
+      expect(results.find((r) => r.id === 'r2')?.output).toContain('bravo')
+
+      const secondTurn = provider.transcripts[1] ?? []
+      const toolMessages = secondTurn.filter((m) => m.role === 'tool')
+      expect(toolMessages.map((m) => m.toolCallId)).toEqual(['r1', 'r2'])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('retries a transient provider failure before giving up', async () => {
+    const provider = new ScriptedProvider([
+      [{ type: 'error', message: 'HTTP 429: rate limited' }],
+      [{ type: 'text', text: 'Recovered after retry.' }, { type: 'done', finishReason: 'stop' }]
+    ])
+
+    const events: string[] = []
+    const result = await runAgentLoop({
+      provider,
+      goal: 'Say hello',
+      workspacePath: process.cwd(),
+      permissionMode: 'autonomous',
+      maxSteps: 3,
+      onEvent: (e) => events.push(e.type),
+      requestPermission: async () => true,
+      askUser: async () => 'yes'
+    })
+
+    expect(result.status).toBe('success')
+    expect(result.summary).toContain('Recovered')
+    expect(events).toContain('notice')
+  })
+
+  it('surfaces reasoning chunks as events', async () => {
+    const provider = new ScriptedProvider([
+      [
+        { type: 'reasoning', text: 'Let me think.' },
+        { type: 'text', text: 'Done.' },
+        { type: 'done', finishReason: 'stop' }
+      ]
+    ])
+
+    const events: string[] = []
+    await runAgentLoop({
+      provider,
+      goal: 'Think then answer',
+      workspacePath: process.cwd(),
+      permissionMode: 'autonomous',
+      maxSteps: 2,
+      onEvent: (e) => events.push(e.type),
+      requestPermission: async () => true,
+      askUser: async () => 'yes'
+    })
+
+    expect(events).toContain('reasoning')
+    expect(events).toContain('thought')
   })
 
   it('watchdog fails a hung model stream instead of stalling forever', async () => {
