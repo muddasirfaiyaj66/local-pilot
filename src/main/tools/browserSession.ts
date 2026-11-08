@@ -42,14 +42,46 @@ class BrowserSession {
       return this.page
     }
 
-    this.context = await chromium.launchPersistentContext(this.profileDir(), {
-      headless: false,
-      viewport: { width: 1280, height: 800 },
-      args: ['--disable-blink-features=AutomationControlled']
-    })
+    this.context = await this.launchContext()
     const pages = this.context.pages()
     this.page = pages[0] ?? (await this.context.newPage())
     return this.page
+  }
+
+  /**
+   * Launch Playwright's bundled Chromium; when it is not installed
+   * (`npx playwright install` never ran), fall back to a system Chrome or Edge.
+   * LOCALPILOT_BROWSER_CHANNEL (chrome | msedge | chromium) forces one choice.
+   */
+  private async launchContext(): Promise<BrowserContext> {
+    const options = {
+      headless: false,
+      // Keep Chromium's sandbox on (Playwright defaults to --no-sandbox, which shows a warning bar).
+      chromiumSandbox: true,
+      viewport: { width: 1280, height: 800 },
+      args: ['--disable-blink-features=AutomationControlled']
+    }
+    const forced = process.env.LOCALPILOT_BROWSER_CHANNEL?.trim()
+    const channels: (string | undefined)[] = forced
+      ? [forced === 'chromium' ? undefined : forced]
+      : process.platform === 'win32'
+        ? [undefined, 'msedge', 'chrome']
+        : [undefined, 'chrome', 'msedge']
+    const failures: string[] = []
+    for (const channel of channels) {
+      try {
+        return await chromium.launchPersistentContext(this.profileDir(), {
+          ...options,
+          ...(channel ? { channel } : {})
+        })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        failures.push(`${channel ?? 'bundled chromium'}: ${message.split('\n')[0]}`)
+      }
+    }
+    throw new Error(
+      `No browser could be launched. Install Google Chrome or Microsoft Edge, or run "npx playwright install chromium".\n${failures.join('\n')}`
+    )
   }
 
   async getPage(): Promise<Page> {

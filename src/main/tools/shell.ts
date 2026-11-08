@@ -136,14 +136,17 @@ export const shellTools: RegisteredTool[] = [
     description:
       'Run a shell command with timeout. Prefer workspace cwd. Output is truncated. Denied destructive patterns are blocked.',
     risk: 'risky',
-    timeoutMs: 120_000,
+    timeoutMs: 310_000,
     parameters: RunArgs,
     jsonSchema: {
       type: 'object',
       properties: {
         command: { type: 'string' },
         cwd: { type: 'string', description: 'Working directory (defaults to workspace)' },
-        timeoutMs: { type: 'number' }
+        timeoutMs: {
+          type: 'number',
+          description: 'Default 60000. Use up to 300000 for installs, builds, or downloads.'
+        }
       },
       required: ['command']
     },

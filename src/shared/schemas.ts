@@ -13,6 +13,8 @@ export const ProviderConfigSchema = z.object({
   name: z.string().min(1),
   baseUrl: z.string().url().or(z.string().startsWith('http')),
   model: z.string().min(1),
+  /** Models imported from the provider's model list; selectable in the composer. */
+  models: z.array(z.string()).optional(),
   /** API key is stored encrypted; this flag only indicates presence */
   hasApiKey: z.boolean().default(false),
   visionEnabled: z.boolean().default(false),

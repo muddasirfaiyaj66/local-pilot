@@ -70,6 +70,7 @@ export function Composer({
   const addAttachment = useAppStore((s) => s.addAttachment)
   const removeAttachment = useAppStore((s) => s.removeAttachment)
   const setActiveProvider = useAppStore((s) => s.setActiveProvider)
+  const upsertProvider = useAppStore((s) => s.upsertProvider)
   const setModelRouting = useAppStore((s) => s.setModelRouting)
   const setPermissionMode = useAppStore((s) => s.setPermissionMode)
   const stopStreaming = useAppStore((s) => s.stopStreaming)
@@ -244,20 +245,26 @@ export function Composer({
           <div className="lp-chip">
             <select
               aria-label="Model provider"
-              value={activeId}
+              value={`${activeId}\u0000${providers.find((p) => p.id === activeId)?.model ?? ''}`}
               onChange={(e) => {
-                const id = e.target.value
+                const [id, model] = e.target.value.split('\u0000')
                 void (async () => {
+                  const target = providers.find((p) => p.id === id)
+                  if (target && model && model !== target.model) await upsertProvider({ ...target, model })
                   await setActiveProvider(id)
                   if (settings?.modelRouting.enabled) await setModelRouting({ ...settings.modelRouting, enabled: false })
                 })()
               }}
-              className="lp-select max-w-[160px] truncate"
+              className="lp-select max-w-[200px] truncate"
             >
               {providers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.model}
-                </option>
+                <optgroup key={p.id} label={p.name}>
+                  {[...new Set([p.model, ...(p.models ?? [])])].map((m) => (
+                    <option key={m} value={`${p.id}\u0000${m}`}>
+                      {m}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </div>

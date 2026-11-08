@@ -544,3 +544,26 @@ describe('runAgentLoop', () => {
     }).rejects.toThrow(/stopped responding|timed out/i)
   })
 })
+
+describe('lean mode helpers', async () => {
+  const { isRequestTooLargeError, leanToolsForGoal, compactTools } = await import('./loop')
+  const defs = ['ask_user', 'fs_read', 'shell_run', 'browser_open_url', 'browser_click', 'screen_click', 'media_sharp_crop'].map(
+    (name) => ({ name, description: `Does ${name}. Extra detail here.`, parameters: { type: 'object', properties: { a: { type: 'string', description: 'long prose' } } } })
+  )
+
+  it('detects Groq 413 token-limit errors', () => {
+    expect(isRequestTooLargeError('HTTP 413: {"error":{"message":"Request too large for model qwen"}}')).toBe(true)
+    expect(isRequestTooLargeError('HTTP 500: boom')).toBe(false)
+  })
+
+  it('keeps only browser tools for a web goal', () => {
+    const names = leanToolsForGoal('open facebook and message "hi" to Arfan', defs).map((t) => t.name)
+    expect(names).toEqual(['ask_user', 'browser_open_url', 'browser_click'])
+  })
+
+  it('strips parameter prose and long descriptions', () => {
+    const [tool] = compactTools([defs[1]!])
+    expect(tool!.description).toBe('Does fs_read.')
+    expect(JSON.stringify(tool!.parameters)).not.toContain('long prose')
+  })
+})

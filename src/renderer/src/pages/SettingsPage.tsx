@@ -129,6 +129,11 @@ interface ProviderForm {
   apiKey: string
 }
 
+/** Drop speech, moderation, and embedding models that cannot drive a chat. */
+function chatModels(list: string[]): string[] {
+  return list.filter((m) => !/whisper|tts|orpheus|playai|guard|embed|moderation|dall-e|image|audio|transcribe/i.test(m))
+}
+
 function formFrom(p: ProviderConfig | undefined): ProviderForm {
   return {
     name: p?.name ?? '',
@@ -166,7 +171,7 @@ function ProvidersSection(): React.JSX.Element {
 
   useEffect(() => {
     setForm(formFrom(providers.find((p) => p.id === selectedId)))
-    setModels([])
+    setModels(providers.find((p) => p.id === selectedId)?.models ?? [])
     setShowKey(false)
     setSaved(false)
     // Re-sync only when switching providers, not on every list refresh.
@@ -189,6 +194,7 @@ function ProvidersSection(): React.JSX.Element {
           kind: form.kind,
           baseUrl: form.baseUrl.trim(),
           model: form.model.trim(),
+          ...(selected?.models?.length ? { models: selected.models } : {}),
           visionEnabled: form.visionEnabled,
           reasoningEnabled: form.reasoningEnabled,
           enabled: form.enabled,
@@ -393,9 +399,18 @@ function ProvidersSection(): React.JSX.Element {
                     </datalist>
                     <Button
                       onClick={() => {
-                        void window.localpilot.listProviderModels(selectedId).then((list) => {
+                        void window.localpilot.listProviderModels(selectedId).then(async (list) => {
                           setModels(list)
-                          if (list.length === 0) useAppStore.setState({ testResult: { ok: false, message: 'No models returned — check the key and base URL.' } })
+                          if (list.length === 0) {
+                            useAppStore.setState({ testResult: { ok: false, message: 'No models returned — check the key and base URL.' } })
+                            return
+                          }
+                          // Import chat-capable models so the composer can switch between them.
+                          const imported = chatModels(list)
+                          if (selected && imported.length > 0) {
+                            await upsertProvider({ ...selected, models: imported })
+                            useAppStore.setState({ testResult: { ok: true, message: `Imported ${imported.length} model(s) — pick one from the model menu in chat.` } })
+                          }
                         })
                       }}
                     >

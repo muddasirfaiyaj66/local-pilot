@@ -17,19 +17,32 @@ export function browserScreenshotMeta(
 }
 
 const UrlArgs = z.object({ url: z.string().url() })
-const SelectorArgs = z.object({
-  selector: z.string().min(1),
-  timeoutMs: z.number().int().positive().optional()
-})
-const TypeArgs = z.object({
-  selector: z.string().min(1),
-  text: z.string(),
-  clear: z.boolean().optional()
-})
+
+/** An element is addressed by snapshot ref (preferred), CSS selector, or visible text. */
+const Target = {
+  ref: z.number().int().positive().optional(),
+  selector: z.string().min(1).optional(),
+  text: z.string().min(1).optional()
+}
+const hasTarget = (a: { ref?: number; selector?: string; text?: string }): boolean =>
+  a.ref !== undefined || Boolean(a.selector) || Boolean(a.text)
+const TARGET_MSG = 'Give ref (from browser_get_dom_snapshot), selector, or text.'
+
+const SelectorArgs = z
+  .object({ ...Target, timeoutMs: z.number().int().positive().optional() })
+  .refine(hasTarget, TARGET_MSG)
+const TypeArgs = z
+  .object({ ...Target, text: z.string(), into: z.string().min(1).optional(), clear: z.boolean().optional(), submit: z.boolean().optional() })
+  .refine((a) => a.ref !== undefined || Boolean(a.selector) || Boolean(a.into), 'Give ref, selector, or into (visible label/placeholder).')
 const PressArgs = z.object({
   key: z.string().min(1),
+  ref: z.number().int().positive().optional(),
   selector: z.string().optional()
 })
+const TARGET_SCHEMA = {
+  ref: { type: 'number', description: 'Element number from browser_get_dom_snapshot (preferred).' },
+  selector: { type: 'string', description: 'CSS selector (fallback).' }
+}
 const ScrollArgs = z.object({
   dy: z.number().default(600),
   selector: z.string().optional()
@@ -62,6 +75,78 @@ function wrap(
   }
 }
 
+type Page = Awaited<ReturnType<typeof browserSession.getPage>>
+type Locator = ReturnType<Page['locator']>
+
+/** Resolve a ref / selector / visible text to one visible element. */
+async function locate(
+  page: Page,
+  a: { ref?: number; selector?: string; text?: string; into?: string }
+): Promise<{ locator: Locator; label: string }> {
+  if (a.ref !== undefined) {
+    const locator = page.locator(`[data-lp-ref="${a.ref}"]`).first()
+    if ((await locator.count()) === 0) {
+      throw new Error(`Ref ${a.ref} is gone (page changed). Call browser_get_dom_snapshot again for fresh refs.`)
+    }
+    return { locator, label: `ref ${a.ref}` }
+  }
+  if (a.selector) return { locator: page.locator(a.selector).first(), label: a.selector }
+  const text = a.into ?? a.text ?? ''
+  const candidates: Locator[] = a.into
+    ? [page.getByPlaceholder(text), page.getByLabel(text), page.getByRole('textbox', { name: text }), page.getByRole('combobox', { name: text })]
+    : [page.getByRole('button', { name: text }), page.getByRole('link', { name: text }), page.getByText(text, { exact: true }), page.getByText(text)]
+  for (const candidate of candidates) {
+    const visible = candidate.locator('visible=true').first()
+    if ((await visible.count()) > 0) return { locator: visible, label: `"${text}"` }
+  }
+  throw new Error(`No visible element matches "${text}". Call browser_get_dom_snapshot and use a ref.`)
+}
+
+/**
+ * Tag visible interactive elements with data-lp-ref and list them, so the model
+ * can act by number instead of guessing CSS selectors on obfuscated sites.
+ */
+async function interactiveSnapshot(page: Page, limit: number): Promise<string> {
+  return page.evaluate((max) => {
+    const doc = document
+    doc.querySelectorAll('[data-lp-ref]').forEach((el) => el.removeAttribute('data-lp-ref'))
+    const query = [
+      'a[href]', 'button', 'input:not([type=hidden])', 'textarea', 'select', 'summary',
+      '[contenteditable="true"]', '[contenteditable=""]', '[role=button]', '[role=link]', '[role=textbox]',
+      '[role=searchbox]', '[role=combobox]', '[role=checkbox]', '[role=radio]', '[role=switch]', '[role=tab]',
+      '[role=menuitem]', '[role=option]', '[role=gridcell]', '[role=row]', '[role=listitem]', '[tabindex]:not([tabindex="-1"])'
+    ].join(',')
+    const lines: string[] = []
+    let n = 0
+    for (const el of Array.from(doc.querySelectorAll<HTMLElement>(query))) {
+      if (n >= max) break
+      const rect = el.getBoundingClientRect()
+      if (rect.width < 2 || rect.height < 2) continue
+      if (rect.bottom < 0 || rect.top > window.innerHeight * 2) continue
+      const style = window.getComputedStyle(el)
+      if (style.visibility === 'hidden' || style.display === 'none') continue
+      const role = el.getAttribute('role') ?? (el.isContentEditable ? 'textbox' : el.tagName.toLowerCase())
+      const name = (
+        el.getAttribute('aria-label') ??
+        el.getAttribute('placeholder') ??
+        el.getAttribute('title') ??
+        (el as HTMLInputElement).value ??
+        el.innerText ??
+        ''
+      )
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 80)
+      const extra = el instanceof HTMLInputElement ? ` type=${el.type}` : ''
+      if (!name && !['input', 'textarea', 'textbox', 'searchbox', 'combobox', 'select'].includes(role)) continue
+      n += 1
+      el.setAttribute('data-lp-ref', String(n))
+      lines.push(`[${n}] ${role}${extra} "${name}"`)
+    }
+    return lines.join('\n')
+  }, limit)
+}
+
 export const browserTools: RegisteredTool[] = [
   {
     name: 'browser_open_url',
@@ -84,67 +169,103 @@ export const browserTools: RegisteredTool[] = [
   },
   {
     name: 'browser_click',
-    description: 'Click an element by CSS selector.',
+    description:
+      'Click an element by ref=N from browser_get_dom_snapshot (preferred), visible text, or CSS selector.',
     risk: 'risky',
     timeoutMs: 30_000,
     parameters: SelectorArgs,
     jsonSchema: {
       type: 'object',
       properties: {
-        selector: { type: 'string' },
+        ...TARGET_SCHEMA,
+        text: { type: 'string', description: 'Visible text or accessible name of the element.' },
         timeoutMs: { type: 'number' }
-      },
-      required: ['selector']
+      }
     },
-    preview: (a) => `Click: ${String(a.selector ?? '')}`,
+    preview: (a) => `Click: ${String(a.ref !== undefined ? `ref ${a.ref}` : (a.selector ?? a.text ?? ''))}`,
     execute: wrap(async (raw) => {
       const args = SelectorArgs.parse(raw)
       const page = await browserSession.getPage()
-      await page.click(args.selector, { timeout: args.timeoutMs ?? 15_000 })
-      return okResult(`Clicked ${args.selector}`)
+      const { locator, label } = await locate(page, args)
+      await locator.scrollIntoViewIfNeeded({ timeout: 5_000 }).catch(() => undefined)
+      await locator.click({ timeout: args.timeoutMs ?? 10_000 })
+      await page.waitForLoadState('domcontentloaded', { timeout: 5_000 }).catch(() => undefined)
+      await page.waitForTimeout(600)
+      return okResult(`Clicked ${label}. URL: ${page.url()}
+Refs may have changed — snapshot again before the next action.`)
     })
   },
   {
     name: 'browser_type',
-    description: 'Type text into an element (optionally clear first).',
+    description:
+      'Type text into a field or chat composer by ref=N (preferred), selector, or into=placeholder; submit=true presses Enter after. Works with rich editors.',
     risk: 'risky',
     timeoutMs: 30_000,
     parameters: TypeArgs,
     jsonSchema: {
       type: 'object',
       properties: {
-        selector: { type: 'string' },
+        ...TARGET_SCHEMA,
+        into: { type: 'string', description: 'Placeholder or label of the field, e.g. "Search Messenger".' },
         text: { type: 'string' },
-        clear: { type: 'boolean' }
+        clear: { type: 'boolean' },
+        submit: { type: 'boolean', description: 'Press Enter after typing (send message / run search).' }
       },
-      required: ['selector', 'text']
+      required: ['text']
     },
-    preview: (a) => `Type into ${String(a.selector ?? '')}:\n${String(a.text ?? '').slice(0, 500)}`,
+    preview: (a) =>
+      `Type into ${String(a.ref !== undefined ? `ref ${a.ref}` : (a.selector ?? a.into ?? ''))}${a.submit ? ' and press Enter' : ''}:
+${String(a.text ?? '').slice(0, 500)}`,
     execute: wrap(async (raw) => {
       const args = TypeArgs.parse(raw)
       const page = await browserSession.getPage()
-      if (args.clear) await page.fill(args.selector, '')
-      await page.fill(args.selector, args.text)
-      return okResult(`Typed into ${args.selector}`)
+      const { locator, label } = await locate(page, { ref: args.ref, selector: args.selector, into: args.into })
+      await locator.scrollIntoViewIfNeeded({ timeout: 5_000 }).catch(() => undefined)
+      await locator.click({ timeout: 10_000 })
+      const editable = await locator.evaluate((el) => (el as HTMLElement).isContentEditable).catch(() => false)
+      if (editable) {
+        // Rich editors (Lexical/Draft.js on Messenger, Slack…) ignore fill(); type real keystrokes.
+        if (args.clear) {
+          await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A')
+          await page.keyboard.press('Backspace')
+        }
+        await page.keyboard.type(args.text, { delay: 15 })
+      } else {
+        try {
+          await locator.fill(args.clear === false ? (await locator.inputValue()) + args.text : args.text, { timeout: 5_000 })
+        } catch {
+          await page.keyboard.type(args.text, { delay: 15 })
+        }
+      }
+      if (args.submit) {
+        await page.keyboard.press('Enter')
+        await page.waitForTimeout(800)
+      }
+      return okResult(`Typed into ${label}${args.submit ? ' and pressed Enter' : ''}.`)
     })
   },
   {
     name: 'browser_press',
-    description: 'Press a keyboard key (optionally focused on a selector).',
+    description: 'Press a keyboard key (Enter, Escape, Tab, ArrowDown…), optionally on a ref/selector.',
     risk: 'risky',
     timeoutMs: 15_000,
     parameters: PressArgs,
     jsonSchema: {
       type: 'object',
-      properties: { key: { type: 'string' }, selector: { type: 'string' } },
+      properties: { key: { type: 'string' }, ...TARGET_SCHEMA },
       required: ['key']
     },
     preview: (a) => `Press key: ${String(a.key ?? '')}`,
     execute: wrap(async (raw) => {
       const args = PressArgs.parse(raw)
       const page = await browserSession.getPage()
-      if (args.selector) await page.press(args.selector, args.key)
-      else await page.keyboard.press(args.key)
+      if (args.ref !== undefined || args.selector) {
+        const { locator } = await locate(page, args)
+        await locator.press(args.key, { timeout: 10_000 })
+      } else {
+        await page.keyboard.press(args.key)
+      }
+      await page.waitForTimeout(400)
       return okResult(`Pressed ${args.key}`)
     })
   },
@@ -190,22 +311,31 @@ export const browserTools: RegisteredTool[] = [
   },
   {
     name: 'browser_get_dom_snapshot',
-    description: 'Get a truncated accessibility/DOM text snapshot of the page for reasoning.',
+    description:
+      'List the visible interactive elements as [ref] role "name", plus a short text excerpt. Act on elements with browser_click/browser_type ref=N. Call again after the page changes.',
     risk: 'safe',
     timeoutMs: 30_000,
     parameters: z.object({ maxChars: z.number().int().positive().max(100_000).optional() }),
     jsonSchema: {
       type: 'object',
-      properties: { maxChars: { type: 'number' } }
+      properties: { maxChars: { type: 'number', description: 'Page text excerpt length (default 2000).' } }
     },
     preview: () => 'DOM snapshot',
     execute: wrap(async (raw) => {
-      const maxChars = z.object({ maxChars: z.number().optional() }).parse(raw).maxChars ?? 12_000
+      const maxChars = z.object({ maxChars: z.number().optional() }).parse(raw).maxChars ?? 2_000
       const page = await browserSession.getPage()
-      const snapshot = await page.locator('body').innerText({ timeout: 15_000 })
-      const text = snapshot.slice(0, maxChars)
+      await page.waitForLoadState('domcontentloaded', { timeout: 10_000 }).catch(() => undefined)
+      const elements = await interactiveSnapshot(page, 120)
+      const text = (await page.locator('body').innerText({ timeout: 10_000 }).catch(() => '')).replace(/\n{3,}/g, '\n\n')
       return okResult(
-        `URL: ${page.url()}\nTitle: ${await page.title()}\n\nUNTRUSTED PAGE TEXT:\n${text}`
+        `URL: ${page.url()}
+Title: ${await page.title()}
+
+INTERACTIVE ELEMENTS (use ref=N):
+${elements || '(none found — try browser_screenshot)'}
+
+UNTRUSTED PAGE TEXT (excerpt):
+${text.slice(0, maxChars)}`
       )
     })
   },
